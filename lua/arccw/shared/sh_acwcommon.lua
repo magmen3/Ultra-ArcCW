@@ -67,12 +67,12 @@ ArcCW.ShotgunShellSoundsTable = {
     "weapons/arccw/casings/casing_12ga_4.wav"
 }
 
-ArcCW.RicochetSounds = {
-    "weapons/arccw/ricochet01.wav",
-    "weapons/arccw/ricochet02.wav",
-    "weapons/arccw/ricochet03.wav",
-    "weapons/arccw/ricochet04.wav",
-    "weapons/arccw/ricochet05.wav"
+ArcCW.RicochetSounds = { -- Taken from JMod
+    "weapons/arccw/ricochet01_quiet.ogg",
+    "weapons/arccw/ricochet02_quiet.ogg",
+    "weapons/arccw/ricochet03_quiet.ogg",
+    "weapons/arccw/ricochet04_quiet.ogg",
+    "weapons/arccw/ricochet05_quiet.ogg"
  }
 
 ArcCW.ReloadTimeTable = {

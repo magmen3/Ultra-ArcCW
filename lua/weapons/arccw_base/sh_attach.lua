@@ -1714,6 +1714,7 @@ function SWEP:DamageAttachment(slot, dmg)
 end
 
 function SWEP:SendAttHP()
+	if CLIENT then return end -- Uhhhhh
     net.Start("arccw_sendatthp")
     for i, k in pairs(self.Attachments) do
         if !k.Installed then continue end

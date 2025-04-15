@@ -24,7 +24,8 @@ SWEP.CachedCanBipodTime = 0
 
 local dist = 24
 function SWEP:CanBipod()
-    if !(self:GetBuff_Override("Bipod") or self.Bipod_Integral) then return false end
+    --if !(self:GetBuff_Override("Bipod") or self.Bipod_Integral) then return false end
+	if self.Base == "arccw_base_melee" or self.Base == "arccw_base_nade" then return false end
 
     if self:GetOwner():InVehicle() then return false end
 
@@ -118,7 +119,8 @@ function SWEP:EnterBipod(sp)
 
     if game.SinglePlayer() and CLIENT then return end
 
-    self:MyEmitSound(self.EnterBipodSound)
+	local havebipod = (self:GetBuff_Override("Bipod") or self.Bipod_Integral)
+    self:MyEmitSound(havebipod and self.EnterBipodSound or "weapons/cw/holster4.wav")
     self:SetInBipod(true)
 end
 
@@ -139,6 +141,7 @@ function SWEP:ExitBipod(sp)
 
     if game.SinglePlayer() and CLIENT then return end
 
-    self:MyEmitSound(self.ExitBipodSound)
+	local havebipod = (self:GetBuff_Override("Bipod") or self.Bipod_Integral)
+    self:MyEmitSound(havebipod and self.ExitBipodSound or "weapons/arccw/melee_lift.wav")
     self:SetInBipod(false)
 end
