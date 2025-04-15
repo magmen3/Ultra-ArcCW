@@ -8,14 +8,15 @@ ArcCW.GenerateAttEntities = true
 
 ArcCW.AttachmentCachedLists = {}
 
+local GetConVar = GetConVar
 local shortname = ""
-local genAttCvar = ArcCW.ConVars["reloadatts_registerentities"]
+local genAttCvar = GetConVar("arccw_reloadatts_registerentities")
 
 function ArcCW.LoadAttachmentType(att, name)
-    if name == "" then return end
+
     name = name or shortname
 
-    if !att.Ignore or ArcCW.ConVars["reloadatts_showignored"]:GetBool() then
+    if !att.Ignore or GetConVar("arccw_reloadatts_showignored"):GetBool() then
         ArcCW.AttachmentTable[name] = att
         ArcCW.AttachmentIDTable[ArcCW.NumAttachments] = name
 
@@ -32,7 +33,7 @@ function ArcCW.LoadAttachmentType(att, name)
         if genAttCvar:GetBool() and !att.DoNotRegister and !att.InvAtt and !att.Free then
             local attent = {}
             attent.Base = "arccw_att_base"
-            if CLIENT and att.Icon then
+            if att.Icon then
                 attent.IconOverride = string.Replace( att.Icon:GetTexture( "$basetexture" ):GetName() .. ".png", "0001010", "" )
             end
             attent.PrintName = att.PrintName or name
@@ -43,10 +44,6 @@ function ArcCW.LoadAttachmentType(att, name)
             attent.GiveAttachments = {
                 [att.ShortName] = 1
             }
-
-            if att.EntityCategory and !list.HasEntry("ContentCategoryIcons", att.EntityCategory) then
-                list.Set("ContentCategoryIcons", att.EntityCategory, "arccw/icon_16.png")
-            end
 
             scripted_ents.Register( attent, "acwatt_" .. name )
         end
@@ -220,6 +217,7 @@ if CLIENT then
         end
     end )
 elseif SERVER then
+    local bitNecessity = ArcCW.GetBitNecessity()
     net.Receive("arccw_reloadatts", function(len, ply)
         if !ply:IsSuperAdmin() then return end
 
@@ -231,13 +229,13 @@ elseif SERVER then
 
     local antiSpam = {}
     net.Receive("arccw_blacklist", function(len, ply)
-
         -- If this message is a request to get blacklist, send it and return
         local isRequest = net.ReadBool()
         if isRequest then
-            if antiSpam[ply] and antiSpam[ply] > CurTime() then return end
+            local now = CurTime()
+            if antiSpam[ply] and antiSpam[ply] > now then return end
             -- Debounce client request so they can't attempt to spam netmessages
-            antiSpam[ply] = CurTime() + 10
+            antiSpam[ply] = now + 10
 
             ArcCW_SendBlacklist(ply)
             return
@@ -246,10 +244,10 @@ elseif SERVER then
         end
 
         -- Server receives admin's changes to blacklist table
-        local amt = net.ReadUInt(ArcCW.GetBitNecessity())
+        local amt = net.ReadUInt(bitNecessity)
         ArcCW.AttachmentBlacklistTable = {}
         for i = 1, amt do
-            local id = net.ReadUInt(ArcCW.GetBitNecessity())
+            local id = net.ReadUInt(bitNecessity)
             local attName = ArcCW.AttachmentIDTable[id]
             if attName and ArcCW.AttachmentTable[attName] then
                 ArcCW.AttachmentBlacklistTable[attName] = true
@@ -262,10 +260,14 @@ elseif SERVER then
         file.Write("arccw_blacklist.txt", util.TableToJSON(ArcCW.AttachmentBlacklistTable))
         ArcCW_SendBlacklist()
     end)
+
+    hook.Add("PlayerDisconnected", "ArcCW_CleanAntiSpamTable", function(ply)
+        antiSpam[ply] = nil
+    end)
 end
 
 hook.Add("PostCleanupMap", "ArcCW_ReloadAttsDebug", function()
-    if ArcCW.ConVars["reloadatts_mapcleanup"]:GetBool() then ArcCW_LoadAtts() end
+    if GetConVar("arccw_reloadatts_mapcleanup"):GetBool() then ArcCW_LoadAtts() end
 end)
 
 ArcCW_LoadAtts()

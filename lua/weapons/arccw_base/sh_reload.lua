@@ -210,13 +210,13 @@ function SWEP:Unload()
 end
 
 function SWEP:HasBottomlessClip()
-    if ArcCW.ConVars["mult_bottomlessclip"]:GetBool() then return true end
+    if GetConVar("arccw_mult_bottomlessclip"):GetBool() then return true end
     if self.BottomlessClip or self:GetBuff_Override("Override_BottomlessClip") then return true end
     return false
 end
 
 function SWEP:HasInfiniteAmmo()
-    if ArcCW.ConVars["mult_infiniteammo"]:GetBool() then return true end
+    if GetConVar("arccw_mult_infiniteammo"):GetBool() then return true end
     if self:GetBuff_Override("Override_InfiniteAmmo", self.InfiniteAmmo) then return true end
     return false
 end

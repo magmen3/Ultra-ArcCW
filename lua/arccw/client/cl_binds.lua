@@ -31,6 +31,7 @@ ArcCW.BindToEffect_Unique = {
     [ArcCW.KEY_MELEE]           = "melee",
 }
 
+local GetConVar = GetConVar
 local lastpressZ = 0
 local lastpressE = 0
 
@@ -41,7 +42,7 @@ function ArcCW:GetBind(bind)
 end
 
 local function ArcCW_TranslateBindToEffect(bind)
-    local alt = ArcCW.ConVars["altbindsonly"]:GetBool()
+    local alt = GetConVar("arccw_altbindsonly"):GetBool()
     if alt then
         return ArcCW.BindToEffect_Unique[bind], true
     else
@@ -98,7 +99,7 @@ local function ArcCW_PlayerBindPress(ply, bind, pressed)
         ToggleAtts(wep)
 
         if ply:FlashlightIsOn() then return false end -- if hl2 flahslight is on we will turn it off as expected
-
+        
         return true -- we dont want hl2 flashlight
      end
 
@@ -110,7 +111,7 @@ local function ArcCW_PlayerBindPress(ply, bind, pressed)
 		wep:ChangeFiremode()
 
         block = true
-    elseif bind == "inv" and !ply:KeyDown(IN_USE) and ArcCW.ConVars["enable_customization"]:GetInt() > -1 then
+    elseif bind == "inv" and !ply:KeyDown(IN_USE) and GetConVar("arccw_enable_customization"):GetInt() > -1 then
 
         local state = wep:GetState() != ArcCW.STATE_CUSTOMIZE
 

@@ -47,8 +47,12 @@ local ClientPanel = {
     { type = "b", text = "#arccw.cvar.toggleads", var = "arccw_toggleads" },
     { type = "b", text = "#arccw.cvar.autosave", var = "arccw_autosave" },
     { type = "c", text = "#arccw.cvar.autosave.desc" },
-    --{ type = "b", text = "#arccw.cvar.embracetradition", var = "arccw_hud_embracetradition" },
-    --{ type = "c", text = "#arccw.cvar.embracetradition.desc" },
+    { type = "b", text = "Old Customization Menu", var = "arccw_oldmenu" },
+    { type = "c", text = "Enable the old customization menu. For true OGs." },
+    { type = "b", text = "Enable fancy spawnmenu", var = "arccw_fancy_spawnmenu" },
+	{ type = "c", text = "Backported from ARC9." },
+    { type = "b", text = "#arccw.cvar.embracetradition", var = "arccw_hud_embracetradition" },
+    { type = "c", text = "#arccw.cvar.embracetradition.desc" },
     { type = "b", text = "#arccw.cvar.glare", var = "arccw_glare" },
     { type = "c", text = "#arccw.cvar.glare.desc" },
     { type = "b", text = "#arccw.cvar.shake", var = "arccw_shake" },
@@ -56,9 +60,7 @@ local ClientPanel = {
     { type = "c", text = "#arccw.cvar.shake_info" },
     { type = "b", text = "#arccw.cvar.aimassist", var = "arccw_aimassist_cl" },
     { type = "c", text = "#arccw.cvar.aimassist_cl.desc" },
-    -- { type = "b", text = "#arccw.cvar.2d3d", var = "arccw_2d3d" },
-    { type = "o", text = "#arccw.cvar.2d3d", var = "arccw_2d3d",
-            choices = {[0] = "#arccw.combobox.disabled", [1] = "#arccw.cvar.2d3d.1", [2] = "#arccw.cvar.2d3d.2"}},
+    { type = "b", text = "#arccw.cvar.2d3d", var = "arccw_2d3d" },
     { type = "c", text = "#arccw.cvar.2d3d_info" },
     { type = "t", text = "#arccw.cvar.language", var = "arccw_language"  },
     { type = "c", text = "#arccw.cvar.language_info" },
@@ -285,8 +287,6 @@ local DevPanel = {
     { type = "c", text = "#arccw.cvar.dev_showignored.desc" },
     { type = "b", text = "#arccw.cvar.dev_debug", var = "arccw_dev_debug", sv = true },
     { type = "c", text = "#arccw.cvar.dev_debug.desc" },
-    --{ type = "b", text = "Customization Menu Overhaul beta", var = "arccw_dev_cust2beta", sv = true },
-    --{ type = "c", text = "Enable the customization menu overhaul. Remove this convar when we done doe" },
     { type = "b", text = "#arccw.cvar.dev_alwaysready", var = "arccw_dev_alwaysready", sv = true },
     { type = "c", text = "#arccw.cvar.dev_alwaysready.desc" },
     { type = "b", text = "#arccw.cvar.dev_benchgun", var = "arccw_dev_benchgun", sv = true },
@@ -764,25 +764,4 @@ hook.Add("PopulateToolMenu", "ArcCW_Options", function()
     for menu, data in pairs(ArcCW.ClientMenus) do
         spawnmenu.AddToolMenuOption("Options", "ArcCW", menu, data.text, "", "", data.func)
     end
-end)
-
--- As of 2023-11-12, this feature is only available on dev branch.
--- Won't break anything on release branch though.
-list.Set("ContentCategoryIcons", "ArcCW - Ammo", "arccw/icon_16.png")
-list.Set("ContentCategoryIcons", "ArcCW - Attachments", "arccw/icon_16.png")
-
--- Give all categories with ArcCW weapons our icon unless one is already set
-local first_populate = true
-hook.Add("PopulateWeapons", "ArcCW_ContentCategoryIcons", function()
-    if !first_populate then return end
-    for i, wep in pairs(weapons.GetList()) do
-        local weap = weapons.Get(wep.ClassName)
-        if weap and weap.ArcCW then
-            local cat = weap.Category
-            if cat and !list.HasEntry("ContentCategoryIcons", cat) then
-                list.Set("ContentCategoryIcons", cat, "arccw/icon_16.png")
-            end
-        end
-    end
-    first_populate = false
 end)

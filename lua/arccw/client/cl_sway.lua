@@ -1,5 +1,5 @@
-local enabled = ArcCW.ConVars["enable_sway"]
-local mult = ArcCW.ConVars["mult_sway"]
+local enabled = GetConVar("arccw_enable_sway")
+local mult = GetConVar("arccw_mult_sway")
 
 ArcCW.SwayDir = 0
 

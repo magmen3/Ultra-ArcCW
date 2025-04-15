@@ -1,5 +1,7 @@
+local GetConVar = GetConVar
+
 hook.Add("CreateTeams", "ArcCW_TrueNames", function()
-    if !ArcCW.ConVars["truenames"]:GetBool() then return end
+    if !GetConVar("arccw_truenames"):GetBool() then return end
 
     for _, i in pairs(weapons.GetList()) do
         local wpn = weapons.GetStored(i.ClassName)

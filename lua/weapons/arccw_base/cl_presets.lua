@@ -4,7 +4,7 @@
 
 
 local function ScreenScaleMulti(input)
-    return ScreenScale(input) * ArcCW.ConVars["hud_size"]:GetFloat()
+    return ScreenScale(input) * GetConVar("arccw_hud_size"):GetFloat()
 end
 
 function SWEP:GetPresetBase()
@@ -21,16 +21,22 @@ function SWEP:GetPresets()
     return files
 end
 
+
+local cvar_cust_sounds = GetConVar("arccw_cust_sounds")
 function SWEP:LoadPreset(presetname)
     presetname = presetname or "autosave"
     if presetname == "autosave" then
         if self:GetNWBool("ArcCW_DisableAutosave", false) then return end
-        if !ArcCW.ConVars["autosave"]:GetBool() then return end
+        if !GetConVar("arccw_autosave"):GetBool() then return end
     end
 
-    if presetname != "autosave" then
-        surface.PlaySound("weapons/arccw/install.wav")
-    end
+	if presetname != "autosave" and cvar_cust_sounds:GetBool() then
+		if GetConVar("arccw_oldmenu"):GetBool() then
+			surface.PlaySound("weapons/cw/attach.wav")
+		else
+			surface.PlaySound("weapons/arccw/install.wav")
+		end
+	end
 
     -- ???
     self.Attachments.BaseClass = nil
@@ -159,7 +165,7 @@ end
 
 function SWEP:SavePreset(presetname)
     presetname = presetname or "autosave"
-    if presetname == "autosave" and !ArcCW.ConVars["attinv_free"]:GetBool() then return end
+    if presetname == "autosave" and !GetConVar("arccw_attinv_free"):GetBool() then return end
 
     local presetTbl = {}
     for i, k in pairs(self.Attachments) do

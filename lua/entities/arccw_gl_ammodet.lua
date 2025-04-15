@@ -29,7 +29,7 @@ function ENT:Detonate()
         self:EmitSound("weapons/underwater_explode3.wav", 125, 100, 1, CHAN_AUTO)
     else
         util.Effect( "Explosion", effectdata)
-        self:EmitSound("phx/kaboom.wav", 125, 100, 1, CHAN_AUTO)
+        self:EmitSound("weapons/arccw/hegrenade/hegrenade_detonate_0"..math.random(3)..".wav", 125, 100, 1, CHAN_AUTO)
     end
 
     local attacker = self
@@ -39,6 +39,7 @@ function ENT:Detonate()
     end
 
     util.BlastDamage(self, attacker, self:GetPos(), 300, 50)
+	util.ScreenShake(self:GetPos(),25,4,.75,450)
 
     self:FireBullets({
         Attacker = attacker,

@@ -1,45 +1,59 @@
-SWEP.Cam_Offset_Ang = nil --Angle(0, 0, 0)
+SWEP.Cam_Offset_Ang = Angle(0, 0, 0)
 
-function SWEP:SelectAnimation(anim)
-    if self:GetNWState() == ArcCW.STATE_SIGHTS and self.Animations[anim .. "_iron"] then
-        anim = anim .. "_iron"
+local isSingleplayer = game.SinglePlayer()
+
+do
+    local cvarArccwNoinspect = GetConVar("arccw_noinspect")
+    local cvarGetBool = FindMetaTable("ConVar").GetBool
+
+    local playerGetInfoNum = FindMetaTable("Player").GetInfoNum
+    
+    -- I hate this function
+    function SWEP:SelectAnimation(anim)
+        local nwState = self.dt.NWState
+        local animations = self.Animations
+    
+        if nwState == ArcCW.STATE_SIGHTS then
+            if animations[anim .. "_iron"] then
+                anim = anim .. "_iron"
+            end
+            if animations[anim .. "_sights"] then
+                anim = anim .. "_sights"
+            end
+            if animations[anim .. "_sight"] then
+                anim = anim .. "_sight"
+            end
+        elseif nwState == ArcCW.STATE_SPRINT and animations[anim .. "_sprint"] and not self:CanShootWhileSprint() then
+            anim = anim .. "_sprint"
+        end
+    
+        if animations[anim .. "_bipod"] and self:InBipod() then
+            anim = anim .. "_bipod"
+        end
+    
+        if nwState == ArcCW.STATE_CUSTOMIZE and animations[anim .. "_inspect"]
+            and ((CLIENT and not cvarGetBool(cvarArccwNoinspect))
+            or (SERVER and playerGetInfoNum(self:GetOwner(), "arccw_noinspect", 0))) 
+        then
+            anim = anim .. "_inspect"
+        end
+    
+        if (self:Clip1() == 0 or (self:HasBottomlessClip() and self:Ammo1() == 0)) and animations[anim .. "_empty"] then
+            anim = anim .. "_empty"
+        end
+    
+        if self:GetMalfunctionJam() and animations[anim .. "_jammed"] then
+            anim = anim .. "_jammed"
+        end
+    
+        if self:GetBuff_Override("Override_TriggerDelay", self.TriggerDelay) and self:IsTriggerHeld() and animations[anim .. "_trigger"] then
+            anim = anim .. "_trigger"
+        end
+    
+        if not animations[anim] then return end
+    
+        return anim
     end
-
-    if self:GetNWState() == ArcCW.STATE_SIGHTS and self.Animations[anim .. "_sights"] then
-        anim = anim .. "_sights"
-    end
-
-    if self:GetNWState() == ArcCW.STATE_SIGHTS and self.Animations[anim .. "_sight"] then
-        anim = anim .. "_sight"
-    end
-
-    if self:GetNWState() == ArcCW.STATE_SPRINT and self.Animations[anim .. "_sprint"] and !self:CanShootWhileSprint() then
-        anim = anim .. "_sprint"
-    end
-
-    if self:InBipod() and self.Animations[anim .. "_bipod"] then
-        anim = anim .. "_bipod"
-    end
-
-    if self:GetState() == ArcCW.STATE_CUSTOMIZE and self.Animations[anim .. "_inspect"] and ((CLIENT and !ArcCW.ConVars["noinspect"]:GetBool()) or (SERVER and self:GetOwner():GetInfoNum("arccw_noinspect", 0))) then
-        anim = anim .. "_inspect"
-    end
-
-    if (self:Clip1() == 0 or (self:HasBottomlessClip() and self:Ammo1() == 0)) and self.Animations[anim .. "_empty"] then
-        anim = anim .. "_empty"
-    end
-
-    if self:GetMalfunctionJam() and self.Animations[anim .. "_jammed"] then
-        anim = anim .. "_jammed"
-    end
-
-    if self:GetBuff_Override("Override_TriggerDelay", self.TriggerDelay) and self:IsTriggerHeld() and self.Animations[anim .. "_trigger"] then
-        anim = anim .. "_trigger"
-    end
-
-    if !self.Animations[anim] then return end
-
-    return anim
 end
 
 SWEP.LastAnimStartTime = 0
@@ -49,193 +63,241 @@ function SWEP:PlayAnimationEZ(key, mult, priority)
     return self:PlayAnimation(key, mult, true, 0, false, false, priority, false)
 end
 
-function SWEP:PlayAnimation(key, mult, pred, startfrom, tt, skipholster, priority, absolute)
-    mult = mult or 1
-    pred = pred or false
-    startfrom = startfrom or 0
-    tt = tt or false
-    --skipholster = skipholster or false Unused
-    priority = priority or false
-    absolute = absolute or false
-    if !key then return end
+local inf = math.huge
+local minf = -inf
 
-    local ct = CurTime()
+local ClientAnim = {
+    ["draw"] = true, ["draw_empty"] = true, ["draw_jammed"] = true, ["draw_cocked"] = true,
+    ["holster"] = true, ["holster_empty"] = true, ["holster_jammed"] = true, ["holster_cocked"] = true,
+    ["ready"] = true, ["enter_inspect"] = true, ["exit_inspect"] = true,
+    ["1_to_2"] = true, ["2_to_1"] = true, ["2_to_3"] = true,
+}
 
-    if self:GetPriorityAnim() and !priority then return end
+do
+    local PLAYER = FindMetaTable("Player")
+    local playerGetViewModel = PLAYER.GetViewModel
+    local playerAddVCDSequenceToGestureSlot = PLAYER.AddVCDSequenceToGestureSlot
 
-    if game.SinglePlayer() and SERVER and pred then
-        net.Start("arccw_sp_anim")
-        net.WriteString(key)
-        net.WriteFloat(mult)
-        net.WriteFloat(startfrom)
-        net.WriteBool(tt)
-        --net.WriteBool(skipholster) Unused
-        net.WriteBool(priority)
-        net.Send(self:GetOwner())
+    local ENTITY = FindMetaTable("Entity")
+    local entityLookupSequence = ENTITY.LookupSequence
+    local entitySelectWeightedSequence = ENTITY.SelectWeightedSequence
+    local entityGetPos = ENTITY.GetPos
+    local entitySendViewModelMatchingSequence = ENTITY.SendViewModelMatchingSequence
+    local entitySequenceDuration = ENTITY.SequenceDuration
+    local entitySetPlaybackRate = ENTITY.SetPlaybackRate
+    local entityGetAttachment = ENTITY.GetAttachment
+    local entityWorldToLocalAngles = ENTITY.WorldToLocalAngles
+
+    local util_SharedRandom = util.SharedRandom
+
+    local function IsClientAnim(key)
+        return ClientAnim[key]
     end
 
-    local anim = self.Animations[key]
-    if !anim then return end
-    local tranim = self:GetBuff_Hook("Hook_TranslateAnimation", key)
-    if self.Animations[tranim] then
-        key = tranim
-        anim = self.Animations[tranim]
-    --[[elseif self.Animations[key] then -- Can't do due to backwards compatibility... unless you have a better idea?
-        anim = self.Animations[key]
-    else
-        return]]
-    end
+    function SWEP:PlayAnimation(key, mult, pred, startfrom, tt, skipholster, priority, absolute)
+        mult = mult or 1
+        pred = pred or false
+        startfrom = startfrom or 0
+        tt = tt or false
+        --skipholster = skipholster or false Unused
+        priority = priority or false
+        absolute = absolute or false
+        if not key then return end
 
-    if anim.ViewPunchTable and CLIENT then
-        for k, v in pairs(anim.ViewPunchTable) do
+        local ct = CurTime()
 
-            if !v.t then continue end
+        if self:GetPriorityAnim() and not priority then return end
 
-            local st = (v.t * mult) - startfrom
+        local owner = self:GetOwner()
+        local ownerIsPlayer = owner:IsPlayer()
 
-            if isnumber(v.t) and st >= 0 and self:GetOwner():IsPlayer() and (game.SinglePlayer() or IsFirstTimePredicted()) then
-                self:SetTimer(st, function() self:OurViewPunch(v.p or Vector(0, 0, 0)) end, id)
+        if isSingleplayer and SERVER and pred then
+            net.Start("arccw_sp_anim")
+            net.WriteString(key)
+            net.WriteFloat(mult)
+            net.WriteFloat(startfrom)
+            net.WriteBool(tt)
+            --net.WriteBool(skipholster) Unused
+            net.WriteBool(priority)
+            net.Send(owner)
+        end
+
+        local anim = self.Animations[key]
+        if not anim then return end
+        local tranim = self:GetBuff_Hook("Hook_TranslateAnimation", key)
+        if self.Animations[tranim] then
+            key = tranim
+            anim = self.Animations[tranim]
+        --[[elseif self.Animations[key] then -- Can't do due to backwards compatibility... unless you have a better idea?
+            anim = self.Animations[key]
+        else
+            return]]
+        end
+    
+        local isFirstTimePredicted = IsFirstTimePredicted()
+
+        if CLIENT and anim.ViewPunchTable then
+            for k, v in ipairs(anim.ViewPunchTable) do
+    
+                if !v.t then continue end
+    
+                local st = (v.t * mult) - startfrom
+    
+                if st >= 0 and isnumber(v.t) and ownerIsPlayer and (isSingleplayer or isFirstTimePredicted) then
+                    self:SetTimer(st, function() self:OurViewPunch(v.p or vector_origin) end, id)
+                end
             end
         end
-    end
 
-    if isnumber(anim.ShellEjectAt) then
-        self:SetTimer(anim.ShellEjectAt * mult, function()
-            local num = 1
-            if self.RevolverReload then
-                num = self.Primary.ClipSize - self:Clip1()
-            end
-            for i = 1,num do
-                self:DoShellEject()
-            end
-        end)
-    end
+        if isnumber(anim.ShellEjectAt) then
+            self:SetTimer(anim.ShellEjectAt * mult, function()
+                local num = 1
+                if self.RevolverReload then
+                    num = self.Primary.ClipSize - self:Clip1()
+                end
+                for i = 1, num do
+                    self:DoShellEject()
+                end
+            end)
+        end
 
-    if !self:GetOwner() then return end
-    if !self:GetOwner().GetViewModel then return end
-    local vm = self:GetOwner():GetViewModel()
+        if not owner then return end
+        if not owner.GetViewModel then return end
+        local vm = playerGetViewModel(owner)
+    
+        if not IsValid(vm) then return end
 
-    if !vm then return end
-    if !IsValid(vm) then return end
+        local now = CurTime()
 
-    local seq = anim.Source
-    if anim.RareSource and util.SharedRandom("raresource", 0, 1, CurTime()) < (1 / (anim.RareSourceChance or 100)) then
-        seq = anim.RareSource
-    end
-    seq = self:GetBuff_Hook("Hook_TranslateSequence", seq)
+        local seq = anim.Source
+        if anim.RareSource and util_SharedRandom("raresource", 0, 1, now) < (1 / (anim.RareSourceChance or 100)) then
+            seq = anim.RareSource
+        end
+        seq = self:GetBuff_Hook("Hook_TranslateSequence", seq)
 
-    if istable(seq) then
-        seq["BaseClass"] = nil
-        seq = seq[math.Round(util.SharedRandom("randomseq" .. CurTime(), 1, #seq))]
-    end
+        if istable(seq) then
+            seq["BaseClass"] = nil
+            seq = seq[math.Round(util_SharedRandom("randomseq" .. now, 1, #seq))]
+        end
 
-    if isstring(seq) then
-        seq = vm:LookupSequence(seq)
-    end
+        if isstring(seq) then
+            seq = entityLookupSequence(vm, seq)
+        end
 
-    local time = absolute and 1 or self:GetAnimKeyTime(key)
-    --if time == 0 then return end
+        local time = absolute and 1 or self:GetAnimKeyTime(key)
+        local timeMult = time * mult
+        local ttime = timeMult - startfrom
 
-    local ttime = (time * mult) - startfrom
-    if startfrom > (time * mult) then return end
+        -- if startfrom > timeMult then return end
+        if ttime < 0 then
+            return
+        end
 
-    if tt then
-        self:SetNextPrimaryFire(ct + ((anim.MinProgress or time) * mult) - startfrom)
-    end
+        if tt then
+            self:SetNextPrimaryFire(ct + ((anim.MinProgress or time) * mult) - startfrom)
+        end
 
-    if anim.LHIK then
-        self.LHIKStartTime = ct
-        self.LHIKEndTime = ct + ttime
+        if anim.LHIK then
+            self.LHIKStartTime = ct
+            self.LHIKEndTime = ct + ttime
 
-        if anim.LHIKTimeline then
-            self.LHIKTimeline = {}
+            if anim.LHIKTimeline then
+                -- self.LHIKTimeline = {}
+                local timeline = {}
+                local animTimeline = anim.LHIKTimeline
+                for i = 1, #animTimeline do
+                    timeline[i] = animTimeline[i]
+                end
 
-            for i, k in pairs(anim.LHIKTimeline) do
-                table.Add(self.LHIKTimeline, {t = (k.t or 0) * mult, lhik = k.lhik or 1})
+                self.LHIKTimeline = timeline
+            else
+                local lhikInDefault = anim.LHIKIn or 0.1
+                local lhikOutDefault = anim.LHIKOut or 0.1
+
+                self.LHIKTimeline = {
+                    {t = minf, lhik = 1},
+                    {t = (lhikInDefault - (anim.LHIKEaseIn or lhikInDefault)) * mult, lhik = 1},
+                    {t = lhikInDefault * mult, lhik = 0},
+                    {t = ttime - (lhikOutDefault * mult), lhik = 0},
+                    {t = ttime - ((lhikOutDefault - (anim.LHIKEaseOut or lhikOutDefault)) * mult), lhik = 1},
+                    {t = inf, lhik = 1}
+                }
+
+                if anim.LHIKIn == 0 then
+                    self.LHIKTimeline[1].lhik = minf
+                    self.LHIKTimeline[2].lhik = minf
+                end
+
+                if anim.LHIKOut == 0 then
+                    local len = #self.LHIKTimeline
+                    self.LHIKTimeline[len - 1].lhik = inf
+                    self.LHIKTimeline[len].lhik = inf
+                end
             end
         else
-            self.LHIKTimeline = {
-                {t = -math.huge, lhik = 1},
-                {t = ((anim.LHIKIn or 0.1) - (anim.LHIKEaseIn or anim.LHIKIn or 0.1)) * mult, lhik = 1},
-                {t = (anim.LHIKIn or 0.1) * mult, lhik = 0},
-                {t = ttime - ((anim.LHIKOut or 0.1) * mult), lhik = 0},
-                {t = ttime - (((anim.LHIKOut or 0.1) - (anim.LHIKEaseOut or anim.LHIKOut or 0.1)) * mult), lhik = 1},
-                {t = math.huge, lhik = 1}
-            }
+            self.LHIKTimeline = nil
+        end
 
-            if anim.LHIKIn == 0 then
-                self.LHIKTimeline[1].lhik = -math.huge
-                self.LHIKTimeline[2].lhik = -math.huge
-            end
+        if anim.LastClip1OutTime then
+            self.LastClipOutTime = ct + ((anim.LastClip1OutTime * mult) - startfrom)
+        end
 
-            if anim.LHIKOut == 0 then
-                self.LHIKTimeline[#self.LHIKTimeline - 1].lhik = math.huge
-                self.LHIKTimeline[#self.LHIKTimeline].lhik = math.huge
+        if anim.TPAnim then
+            local aseq = entitySelectWeightedSequence(owner, anim.TPAnim)
+            if aseq then
+                playerAddVCDSequenceToGestureSlot(owner, GESTURE_SLOT_ATTACK_AND_RELOAD, aseq, anim.TPAnimStartTime or 0, true)
+                if !isSingleplayer and SERVER then
+                    net.Start("arccw_networktpanim")
+                        net.WriteEntity(owner)
+                        net.WriteUInt(aseq, 16)
+                        net.WriteFloat(anim.TPAnimStartTime or 0)
+                    net.SendPVS(entityGetPos(owner))
+                end
             end
         end
-    else
-        self.LHIKTimeline = nil
-    end
 
-    if anim.LastClip1OutTime then
-        self.LastClipOutTime = ct + ((anim.LastClip1OutTime * mult) - startfrom)
-    end
+        if !(isSingleplayer and CLIENT) and (isSingleplayer or isFirstTimePredicted) or IsClientAnim(key) then
+            self:PlaySoundTable(anim.SoundTable or {}, 1 / mult, startfrom, key)
+        end
 
-    if anim.TPAnim then
-        local aseq = self:GetOwner():SelectWeightedSequence(anim.TPAnim)
-        if aseq then
-            self:GetOwner():AddVCDSequenceToGestureSlot( GESTURE_SLOT_ATTACK_AND_RELOAD, aseq, anim.TPAnimStartTime or 0, true )
-            if !game.SinglePlayer() and SERVER then
-                net.Start("arccw_networktpanim")
-                    net.WriteEntity(self:GetOwner())
-                    net.WriteUInt(aseq, 16)
-                    net.WriteFloat(anim.TPAnimStartTime or 0)
-                net.SendPVS(self:GetOwner():GetPos())
+        if seq then
+            entitySendViewModelMatchingSequence(vm, seq)
+            local dur = entitySequenceDuration(vm)
+            entitySetPlaybackRate(vm, math.Clamp(dur / (ttime + startfrom), -4, 12))
+            self.LastAnimStartTime = ct
+            self.LastAnimFinishTime = ct + dur
+            self.LastAnimKey = key
+        end
+
+        local att = self:GetBuff_Override("Override_CamAttachment") or self.CamAttachment -- why is this here if we just... do cool stuff elsewhere?
+        if att then
+            local attachmentData = entityGetAttachment(vm, att)
+            if attachmentData then
+                self.Cam_Offset_Ang = entityWorldToLocalAngles(vm, attachmentData.Ang)
             end
         end
+
+        self:SetNextIdle(now + ttime)
+
+        return true
     end
-
-    if !(game.SinglePlayer() and CLIENT) and (game.SinglePlayer() or IsFirstTimePredicted() or self.ReadySoundTableHack) then
-        self:PlaySoundTable(anim.SoundTable or {}, 1 / mult, startfrom, key)
-        self.ReadySoundTableHack = nil
-    end
-
-    if seq then
-        vm:SendViewModelMatchingSequence(seq)
-        local dur = vm:SequenceDuration()
-        vm:SetPlaybackRate(math.Clamp(dur / (ttime + startfrom), -4, 12))
-        self.LastAnimStartTime = ct
-        self.LastAnimFinishTime = ct + dur
-        self.LastAnimKey = key
-    end
-
-    -- Grabs the current angle of the cam attachment bone and use it as the common offset for all cambone changes.
-    -- Problem: If this animation interrupted a previous animation with cambone movement,
-    -- it will start with an incorrect offset and snap at the end.
-    -- Therefore this now only ever sets it once.
-    local att = self:GetBuff_Override("Override_CamAttachment", self.CamAttachment)
-    if att and vm:GetAttachment(att) and (anim.ForceCamReset or self.Cam_Offset_Ang == nil) then
-        local ang = vm:GetAttachment(att).Ang
-        ang = vm:WorldToLocalAngles(ang)
-        self.Cam_Offset_Ang = Angle(ang)
-    end
-
-    self:SetNextIdle(CurTime() + ttime)
-
-    return true
 end
 
 function SWEP:PlayIdleAnimation(pred)
+    local swepDt = self.dt
+
     local ianim = self:SelectAnimation("idle")
-    if self:GetGrenadePrimed() then
+    if swepDt.GrenadePrimed then
         ianim = self:GetGrenadeAlt() and self:SelectAnimation("pre_throw_hold_alt") or self:SelectAnimation("pre_throw_hold")
     end
 
+    local inUBGL = swepDt.InUBGL
     -- (key, mult, pred, startfrom, tt, skipholster, ignorereload)
-    if self:GetBuff_Override("UBGL_BaseAnims") and self:GetInUBGL()
-            and self.Animations.idle_ubgl_empty and self:Clip2() <= 0 then
+    if inUBGL and self:GetBuff_Override("UBGL_BaseAnims")
+        and self.Animations.idle_ubgl_empty and self:Clip2() <= 0 
+    then
         ianim = "idle_ubgl_empty"
-    elseif self:GetBuff_Override("UBGL_BaseAnims") and self:GetInUBGL() and self.Animations.idle_ubgl then
+    elseif inUBGL and self.Animations.idle_ubgl and self:GetBuff_Override("UBGL_BaseAnims") then
         ianim = "idle_ubgl"
     end
 
@@ -291,7 +353,7 @@ if CLIENT then
         local ent = net.ReadEntity()
         local aseq = net.ReadUInt(16)
         local starttime = net.ReadFloat()
-        if IsValid(ent) and ent ~= LocalPlayer() and ent:IsPlayer() then
+        if IsValid(ent) && ent ~= LocalPlayer() then
             ent:AddVCDSequenceToGestureSlot( GESTURE_SLOT_ATTACK_AND_RELOAD, aseq, starttime, true )
         end
     end)

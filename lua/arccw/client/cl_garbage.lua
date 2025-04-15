@@ -3,6 +3,7 @@ ArcCW.CSModelPile    = {} -- { {Model = NULL, Weapon = NULL} }
 ArcCW.FlashlightPile = {} -- { {Weapon = NULL, ProjectedTexture = NULL}}
 ArcCW.ReferenceModel = NULL
 
+local dev = GetConVar("developer")
 local function ArcCW_CollectGarbage()
     local removed, removedents = 0, {}
 
@@ -35,7 +36,7 @@ local function ArcCW_CollectGarbage()
 
     ArcCW.CSModelPile = newpile
 
-    if GetConVar("developer"):GetBool() and removed > 0 then
+    if dev:GetBool() and removed > 0 then
         print("Removed " .. tostring(removed) .. " CSModels")
     end
 end
@@ -77,7 +78,7 @@ end)
 concommand.Add("arccw_dev_loadallattmodels", function()
     local e = ClientsideModel("models/weapons/v_pistol.mdl")
     print("created subject", e)
-    
+
     for i, v in pairs(ArcCW.AttachmentTable) do
         if v.Model then
             print("\t- " .. v.Model)

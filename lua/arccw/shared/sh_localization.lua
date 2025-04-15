@@ -2,6 +2,8 @@ if SERVER and game.SinglePlayer() then
     util.AddNetworkString("arccw_sp_reloadlangs")
 end
 
+local GetConVar = GetConVar
+
 ArcCW.LangTable = ArcCW.LangTable or {}
 -- Converts raw string to a lang phrase. not case sensitive.
 ArcCW.StringToLang = {
@@ -71,7 +73,7 @@ ArcCW.StringToLang = {
 
 -- Helper function for getting the overwrite or default language
 function ArcCW.GetLanguage()
-    local l = ArcCW.ConVars["language"] and string.lower(ArcCW.ConVars["language"]:GetString())
+    local l = GetConVar("arccw_language") and string.lower(GetConVar("arccw_language"):GetString())
     if !l or l == "" then l = string.lower(GetConVar("gmod_language"):GetString()) end
     return l
 end
@@ -140,7 +142,7 @@ function ArcCW.TranslateAmmo(ammo)
 
     local lang = ArcCW.GetLanguage()
     local str = "ammo." .. ammo
-    if SERVER or ArcCW.ConVars["ammonames"]:GetBool() then
+    if SERVER or GetConVar("arccw_ammonames"):GetBool() then
         if ArcCW.LangTable[lang] and ArcCW.LangTable[lang][str] then
             return ArcCW.LangTable[lang][str]
         elseif ArcCW.LangTable["en"][str] then
@@ -228,7 +230,7 @@ end
 
 ArcCW.LoadLanguages()
 hook.Add("PreGamemodeLoaded", "ArcCW_Lang", function()
-    if CLIENT and ArcCW.ConVars["ammonames"]:GetBool() then
+    if CLIENT and GetConVar("arccw_ammonames"):GetBool() then
         local ourlang = ArcCW.GetLanguage()
         for _, name in pairs(game.GetAmmoTypes()) do
             if ArcCW.LangTable[ourlang] and ArcCW.LangTable[ourlang]["ammo." .. string.lower(name)] then

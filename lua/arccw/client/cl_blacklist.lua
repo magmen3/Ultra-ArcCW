@@ -1,9 +1,9 @@
 local srf      = surface
-
+local GetConVar = GetConVar
 
 
 local function ScreenScaleMulti(input)
-    return ScreenScale(input) * ArcCW.ConVars["hud_size"]:GetFloat()
+    return ScreenScale(input) * GetConVar("arccw_hud_size"):GetFloat()
 end
 
 local blacklistWindow = nil

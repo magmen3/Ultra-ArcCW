@@ -2,7 +2,7 @@ L = {}
 STL = {}
 
 -- not a translate string, but in case a language needs its own font
-L["default_font"] = "Bahnschrift"
+L["default_font"] = "Bender"
 
 -- Attachment Slots
 L["attslot.optic"] = "Optic"
@@ -382,9 +382,6 @@ L["attslot.magazine.default"] = "Standard Magazine"
 L["autostat.ubgl"] = "Selectable underbarrel weapon"
 L["autostat.ubgl2"] = "Press your USE key and RELOAD key together to activate underbarrel weapon"
 L["autostat.ammotypeubgl"] = "Underbarrel weapon uses %s"
-
--- 2023-09-09
-L["autostat.triggerdelay"] = "Trigger delay"
 
 
 --[[]

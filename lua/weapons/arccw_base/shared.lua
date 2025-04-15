@@ -3,6 +3,7 @@ AddCSLuaFile()
 -- For those who may find it useful...
 -- use WEAPONENTITY:SetNWBool("ArcCW_DisableAutosave", true) to tell the client to not load their autosaves.
 
+SWEP.Base = "weapon_base_kent"
 SWEP.Spawnable = false -- this obviously has to be set to true
 SWEP.AutoSpawnable = nil -- TTT weapon autospawn. ArcCW weapons automatically spawn in TTT as long as SWEP.Spawnable is set to true
 SWEP.Category = "ArcCW - Firearms" -- edit this if you like
@@ -333,10 +334,10 @@ SWEP.AlwaysFreeAim = nil
 
 -- If Jamming is enabled, a heat meter will gradually build up until it reaches HeatCapacity.
 -- Once that happens, the gun will overheat, playing an animation. If HeatLockout is true, it cannot be fired until heat is 0 again.
-SWEP.Jamming = false
+SWEP.Jamming = true
 SWEP.HeatGain = 1 -- heat gained per shot
-SWEP.HeatCapacity = 200 -- rounds that can be fired non-stop before the gun jams, playing the "fix" animation
-SWEP.HeatDissipation = 2 -- rounds' worth of heat lost per second
+SWEP.HeatCapacity = 30 -- rounds that can be fired non-stop before the gun jams, playing the "fix" animation
+SWEP.HeatDissipation = 8 -- rounds' worth of heat lost per second
 SWEP.HeatLockout = false -- overheating means you cannot fire until heat has been fully depleted
 SWEP.HeatDelayTime = 0.5
 SWEP.HeatFix = false -- when the "fix" animation is played, all heat is restored.
@@ -673,7 +674,6 @@ SWEP.Animations = {
     --     LastClip1OutTime = 0, -- when should the belt visually replenish on a belt fed
     --     MinProgress = 0, -- how much time in seconds must pass before the animation can be cancelled
     --     ForceEmpty = false, -- Used by empty shotgun reloads that load rounds to force consider the weapon to still be empty.
-    --     ForceCamReset = false, -- Use the first frame of the sequence as starting angles for the cambone.
     -- }
 }
 
@@ -703,7 +703,9 @@ SWEP.ProneMod_DisableTransitions = true
 SWEP.DrawWeaponInfoBox = false
 SWEP.BounceWeaponIcon = false
 
-if CLIENT or game.SinglePlayer() then
+local isSingleplayer = game.SinglePlayer()
+
+if CLIENT or isSingleplayer then
 
 SWEP.RecoilAmount = 0
 SWEP.RecoilAmountSide = 0
@@ -847,14 +849,24 @@ function SWEP:GetBurstCount()
     return self:GetBuff_Hook("Hook_GetBurstCount", self:GetBurstCountUM()) or self:GetBurstCountUM() or 0
 end
 
-function SWEP:SetState(v)
-    self:SetNWState(v)
-    if !game.SinglePlayer() and CLIENT then self.State = v end
-end
+if CLIENT and not isSingleplayer then
+    function SWEP:GetState()
+        return self.State or self.dt.NWState
+    end
 
-function SWEP:GetState(v)
-    if !game.SinglePlayer() and CLIENT and self.State then return self.State end
-    return self:GetNWState(v)
+    -- todo: almost sure we can do it better
+    function SWEP:SetState(state)
+        self:SetNWState(state)
+        self.State = state
+    end
+else
+    function SWEP:GetState()
+        return self.dt.NWState
+    end
+
+    function SWEP:SetState(state)
+        self:SetNWState(state)
+    end
 end
 
 function SWEP:IsProne()
@@ -866,17 +878,31 @@ function SWEP:IsProne()
 end
 
 -- BarrelHitWall is known to cause viewmodel flickering on certain playermodels if called during VM position function (a270cc9)
-local hitwallcache
+local hitwallcache = {0, 0}
+local overrideNearWall = GetConVar("arccw_override_nearwall")
+
+local traceLineResultTab = {}
+
+local traceLineTab = {
+    mask = MASK_SOLID,
+    output = traceLineResultTab,
+}
+
+
 function SWEP:BarrelHitWall()
 
     local len = self:GetBuff("BarrelLength")
-    if len == 0 or !ArcCW.ConVars["override_nearwall"]:GetBool()
-            or (vrmod and vrmod.IsPlayerInVR(self:GetOwner()))
-            or (self:GetOwner():IsPlayer() and self:GetOwner():InVehicle()) then
-        hitwallcache = {0, CurTime()}
+    local owner = self:GetOwner()
+    local curTime = CurTime()
+
+    if len == 0 or !overrideNearWall:GetBool()
+            or (vrmod and vrmod.IsPlayerInVR(owner))
+            or (owner:IsPlayer() and owner:InVehicle()) then
+        hitwallcache[1] = 0
+        hitwallcache[2] = curTime
     end
 
-    if !hitwallcache or hitwallcache[2] ~= CurTime() then
+    if !hitwallcache or hitwallcache[2] ~= curTime then
 
         local offset = self:GetBuff("BarrelOffsetHip")
 
@@ -884,8 +910,8 @@ function SWEP:BarrelHitWall()
             offset = LerpVector(self:GetSightDelta(), self:GetBuff("BarrelOffsetSighted"), offset)
         end
 
-        local dir = self:GetOwner():EyeAngles()
-        local src = self:GetOwner():EyePos()
+        local dir = owner:EyeAngles()
+        local src = owner:EyePos()
         local r, f, u = dir:Right(), dir:Forward(), dir:Up()
 
         for i = 1, 3 do
@@ -895,23 +921,28 @@ function SWEP:BarrelHitWall()
                     + u[i] * offset[3]
         end
 
-        local filter = {self:GetOwner()}
+        local filter = {owner}
 
         table.Add(filter, self.Shields)
 
-        local tr = util.TraceLine({
-            start = src,
-            endpos = src + (f * len),
-            filter = filter,
-            mask = MASK_SOLID
-        })
+        f:Mul(len)
+        f:Add(src) -- equals src + (f*len)
+
+        traceLineTab.start = src
+        traceLineTab.endpos = f
+        traceLineTab.filter = filter
+
+        util.TraceLine(traceLineTab)
+
+        local tr = traceLineResultTab
 
         if tr.Hit and !tr.Entity.ArcCWProjectile then
             --local l = (tr.HitPos - src):Length()
-            --hitwallcache = {math.Clamp(1 - l / len, 0, 1), CurTime()}
-            hitwallcache = {1 - tr.Fraction, CurTime()}
+            --hitwallcache = {math.Clamp(1 - l / len, 0, 1), curTime}
+            hitwallcache[1] = 1-tr.Fraction
         else
-            hitwallcache = {0, CurTime()}
+            hitwallcache[1] = 0
+            hitwallcache[2] = curTime
         end
     end
 
@@ -924,34 +955,34 @@ end
 
 SWEP.CL_SightDelta = 1
 function SWEP:SetSightDelta(d)
-    if !game.SinglePlayer() and CLIENT then self.CL_SightDelta = d end
+    if !isSingleplayer and CLIENT then self.CL_SightDelta = d end
     self:SetNWSightDelta(d)
 end
 
 function SWEP:GetSightDelta()
-    if !game.SinglePlayer() and CLIENT then return self.CL_SightDelta end
+    if !isSingleplayer and CLIENT then return self.CL_SightDelta end
     return self:GetNWSightDelta()
 end
 
 SWEP.CL_SprintDelta = 0
 function SWEP:SetSprintDelta(d)
-    if !game.SinglePlayer() and CLIENT then self.CL_SprintDelta = d end
+    if !isSingleplayer and CLIENT then self.CL_SprintDelta = d end
     self:SetNWSprintDelta(d)
 end
 
 function SWEP:GetSprintDelta()
-    if !game.SinglePlayer() and CLIENT then return self.CL_SprintDelta end
+    if !isSingleplayer and CLIENT then return self.CL_SprintDelta end
     return self:GetNWSprintDelta()
 end
 
 SWEP.CL_MalfunctionJam = false
 function SWEP:SetMalfunctionJam(d)
-    if !game.SinglePlayer() and CLIENT then self.CL_MalfunctionJam = tobool(d) end
+    if !isSingleplayer and CLIENT then self.CL_MalfunctionJam = tobool(d) end
     self:SetNWMalfunctionJam(d)
 end
 
 function SWEP:GetMalfunctionJam()
-    if !game.SinglePlayer() and CLIENT then return self.CL_MalfunctionJam end
+    if !isSingleplayer and CLIENT then return self.CL_MalfunctionJam end
     return self:GetNWMalfunctionJam()
 end
 
@@ -962,8 +993,8 @@ function SWEP:SetGrenadeAlt(d)
 end
 
 function SWEP:GetGrenadeAlt()
-    if !self.Throwing then return false end
-    return self:GetNeedCycle()
+    if not self.Throwing then return false end
+    return self.dt.NeedCycle
 end
 
 function SWEP:SetPriorityAnim(v)

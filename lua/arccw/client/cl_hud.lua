@@ -1,3 +1,5 @@
+local GetConVar = GetConVar
+
 local hide = {
     ["CHudHealth"] = true,
     ["CHudBattery"] = true,
@@ -9,9 +11,9 @@ CreateClientConVar("arccw_hud_togglestats", "0")
 
 ArcCW.HUDElementConVars = {
     ["CHudHealth"] = CreateClientConVar("arccw_hud_showhealth", "1"),
-    ["CHudBattery"] = ArcCW.ConVars["hud_showhealth"],
+    ["CHudBattery"] = GetConVar("arccw_hud_showhealth"),
     ["CHudAmmo"] = CreateClientConVar("arccw_hud_showammo", "1"),
-    ["CHudSecondaryAmmo"] = ArcCW.ConVars["hud_showammo"],
+    ["CHudSecondaryAmmo"] = GetConVar("arccw_hud_showammo"),
 }
 
 local grad = Material("arccw/hud/grad.png", "mips smooth")
@@ -30,7 +32,7 @@ hook.Add("HUDShouldDraw", "ArcCW_HideHUD", function(name)
     if !hide[name] then return end
     if !LocalPlayer():IsValid() then return end
     if !LocalPlayer():GetActiveWeapon().ArcCW then return end
-    if ArcCW.ConVars["override_hud_off"]:GetBool() then return end
+    if GetConVar("arccw_override_hud_off"):GetBool() then return end
     if ArcCW.PollingDefaultHUDElements then return end
     if ArcCW.HUDElementConVars[name] and ArcCW.HUDElementConVars[name]:GetBool() == false then return end
     if engine.ActiveGamemode() == "terrortown" then return end
@@ -56,7 +58,7 @@ ArcCW.PollingDefaultHUDElements = false
 
 function ArcCW:ShouldDrawHUDElement(ele)
     if !GetConVar("cl_drawhud"):GetBool() then return false end
-    if ArcCW.ConVars["override_hud_off"]:GetBool() then return false end
+    if GetConVar("arccw_override_hud_off"):GetBool() then return false end
 
     if engine.ActiveGamemode() == "terrortown" and (ele != "CHudAmmo") then return false end
 
@@ -66,7 +68,7 @@ function ArcCW:ShouldDrawHUDElement(ele)
 
     ArcCW.PollingDefaultHUDElements = true
 
-    if !ArcCW.ConVars["hud_forceshow"]:GetBool() and hook.Call("HUDShouldDraw", nil, ele) == false then
+    if !GetConVar("arccw_hud_forceshow"):GetBool() and hook.Call("HUDShouldDraw", nil, ele) == false then
         ArcCW.PollingDefaultHUDElements = false
         return false
     end
@@ -77,20 +79,20 @@ function ArcCW:ShouldDrawHUDElement(ele)
 end
 
 local function GetFont()
-    local font = "Bahnschrift"
+    local font = "Bender"
 
     if ArcCW.GetTranslation("default_font") then
         font = ArcCW.GetTranslation("default_font")
     end
 
-    if ArcCW.ConVars["font"]:GetString() != "" then
-        font = ArcCW.ConVars["font"]:GetString()
+    if GetConVar("arccw_font"):GetString() != "" then
+        font = GetConVar("arccw_font"):GetString()
     end
 
     return font
 end
 
--- Yes. Yes. Yes. Yes. Yes. Yes. Yes. Yes. Yes. Yes. Yes. Yes. Yes. Yes.
+-- Yes. Yes. Yes. Yes. Yes. Yes. Yes. Yes. Yes. Yes. Yes. Yes. Yes. Yes. 
 -- What is the size of your ass. What is it. Tell me.
 local ScreenScale_CacheC2 = {}
 ArcCW.AugmentedScreenScale = function(size)
@@ -103,14 +105,14 @@ ArcCW.AugmentedScreenScale = function(size)
         scrh = 768
     end
 
-    local scrwmult = ArcCW.ConVars["hud_deadzone_x"]:GetFloat() * scrw
-    local scrhmult = ArcCW.ConVars["hud_deadzone_y"]:GetFloat() * scrh
+    local scrwmult = GetConVar("arccw_hud_deadzone_x"):GetFloat() * scrw
+    local scrhmult = GetConVar("arccw_hud_deadzone_y"):GetFloat() * scrh
 
     scrw, scrh = scrw - scrwmult, scrh - scrhmult
 
     local r = size
     r = r * (math.max(scrw, scrh) / 800)
-    r = r * ArcCW.ConVars["hud_size"]:GetFloat()
+    r = r * GetConVar("arccw_hud_size"):GetFloat()
     ScreenScale_CacheC2[size] = r
     return r
 end
@@ -149,7 +151,7 @@ local function generatefonts()
 
         surface.CreateFont( "ArcCW_" .. tostring(i), {
             font = GetFont(),
-            size = ScreenScale(i) * ArcCW.ConVars["hud_size"]:GetFloat(),
+            size = ScreenScale(i) * GetConVar("arccw_hud_size"):GetFloat(),
             weight = 0,
             antialias = true,
             extended = true, -- Required for non-latin fonts
@@ -157,7 +159,7 @@ local function generatefonts()
 
         surface.CreateFont( "ArcCW_" .. tostring(i) .. "_Glow", {
             font = GetFont(),
-            size = ScreenScale(i) * ArcCW.ConVars["hud_size"]:GetFloat(),
+            size = ScreenScale(i) * GetConVar("arccw_hud_size"):GetFloat(),
             weight = 0,
             antialias = true,
             blursize = 6,
@@ -170,7 +172,7 @@ local function generatefonts()
 
         surface.CreateFont( "ArcCWC2_" .. tostring(i), {
             font = GetFont(),
-            size = ArcCW.AugmentedScreenScale(i) * ArcCW.ConVars["hud_size"]:GetFloat(),
+            size = ArcCW.AugmentedScreenScale(i) * GetConVar("arccw_hud_size"):GetFloat(),
             weight = 0,
             antialias = true,
             extended = true, -- Required for non-latin fonts
@@ -178,7 +180,7 @@ local function generatefonts()
 
         surface.CreateFont( "ArcCWC2_" .. tostring(i) .. "_Glow", {
             font = GetFont(),
-            size = ArcCW.AugmentedScreenScale(i) * ArcCW.ConVars["hud_size"]:GetFloat(),
+            size = ArcCW.AugmentedScreenScale(i) * GetConVar("arccw_hud_size"):GetFloat(),
             weight = 0,
             antialias = true,
             blursize = 6,
@@ -227,7 +229,7 @@ function ArcCW_Regen(full)
     end
 end
 
---cvars.AddChangeCallback("arccw_dev_cust2beta",  function() ArcCW_Regen(true) end)
+cvars.AddChangeCallback("arccw_oldmenu",		function() ArcCW_Regen(true) end)
 cvars.AddChangeCallback("arccw_hud_deadzone_x", function() ArcCW_Regen(true) end)
 cvars.AddChangeCallback("arccw_hud_deadzone_y", function() ArcCW_Regen(true) end)
 cvars.AddChangeCallback("arccw_hud_size",       function() ArcCW_Regen(true) end)

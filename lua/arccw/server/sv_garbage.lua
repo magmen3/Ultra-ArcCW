@@ -1,7 +1,8 @@
 if CLIENT then return end
 
-ArcCW.ShieldPropPile    = {} -- { {Model = NULL, Weapon = NULL} }
+ArcCW.ShieldPropPile = {} -- { {Model = NULL, Weapon = NULL} }
 
+local dev = GetConVar("developer")
 local function SV_ArcCW_CollectGarbage()
     local removed = 0
 
@@ -21,7 +22,7 @@ local function SV_ArcCW_CollectGarbage()
 
     ArcCW.ShieldPropPile = newpile
 
-    if GetConVar("developer"):GetBool() and removed > 0 then
+    if dev:GetBool() and removed > 0 then
         print("Removed " .. tostring(removed) .. " Shield Models")
     end
 end

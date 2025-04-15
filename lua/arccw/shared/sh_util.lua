@@ -1,4 +1,6 @@
 -- Works around the 10 bodygroup limit on ENTITY:SetBodyGroups()
+
+local GetConVar = GetConVar
 function ArcCW.SetBodyGroups(mdl, bodygroups)
     mdl:SetBodyGroups(bodygroups)
     local len = string.len(bodygroups or "")

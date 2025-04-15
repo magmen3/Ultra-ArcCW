@@ -1,3 +1,5 @@
+local GetConVar = GetConVar
+
 hook.Add("PopulateMenuBar", "ArcCW_NPCWeaponMenu", function (menubar)
     local menu = menubar:AddOrGetMenu("ArcCW NPC Weapons")
 

@@ -1,5 +1,8 @@
+local isSinglePlayer = game.SinglePlayer()
+
 function SWEP:CanPrimaryAttack()
     local owner = self:GetOwner()
+    local curTime = CurTime()
 
     -- Should we not fire? But first.
     if self:GetBuff_Hook("Hook_ShouldNotFireFirst") then return end
@@ -9,14 +12,17 @@ function SWEP:CanPrimaryAttack()
     if self:GetHolster_Time() > 0 then return end
 
     -- Disabled (currently used only by deploy)
-    if self:GetState() == ArcCW.STATE_DISABLE then return end
+
+    local state = self:GetState()
+
+    if state == ArcCW.STATE_DISABLE then return end
 
     -- Coostimzing
-    if self:GetState() == ArcCW.STATE_CUSTOMIZE then
+    if state == ArcCW.STATE_CUSTOMIZE then
         if CLIENT and ArcCW.Inv_Hidden then
             ArcCW.Inv_Hidden = false
             gui.EnableScreenClicker(true)
-        elseif game.SinglePlayer() then
+        elseif isSinglePlayer then
             -- Kind of ugly hack: in SP this is only called serverside so we ask client to do the same check
             self:CallOnClient("CanPrimaryAttack")
         end
@@ -27,12 +33,12 @@ function SWEP:CanPrimaryAttack()
     if self:GetPriorityAnim() then return end
 
     -- Inoperable, but internally (burst resetting for example)
-    if self:GetWeaponOpDelay() > CurTime() then return end
+    if self:GetWeaponOpDelay() > curTime then return end
 
     -- Safety's on, dipshit
     if self:GetCurrentFiremode().Mode == 0 then
         self:ChangeFiremode(false)
-        self:SetNextPrimaryFire(CurTime())
+        self:SetNextPrimaryFire(curTime)
         self.Primary.Automatic = false
         return
     end
@@ -44,13 +50,13 @@ function SWEP:CanPrimaryAttack()
     if self:GetInUBGL() then self:ShootUBGL() return end
 
     -- Too early, come back later.
-    if self:GetNextPrimaryFire() >= CurTime() then return end
+    if self:GetNextPrimaryFire() >= curTime then return end
 
     -- Gun is locked from heat.
     if self:GetHeatLocked() then return end
 
     -- Attempting a bash
-    if self:GetState() != ArcCW.STATE_SIGHTS and owner:KeyDown(IN_USE) or self.PrimaryBash then self:Bash() return end
+    if state != ArcCW.STATE_SIGHTS and owner:KeyDown(IN_USE) or self.PrimaryBash then self:Bash() return end
 
     -- Throwing weapon
     if self.Throwing then self:PreThrow() return end
@@ -67,9 +73,11 @@ function SWEP:CanPrimaryAttack()
     -- We need to cycle
     if self:GetNeedCycle() then return end
 
+    local triggerCharge = self:GetBuff_Override("Override_TriggerCharge", self.TriggerCharge)
+
     -- If we have a trigger delay, make sure its progress is done
-    if self:GetBuff_Override("Override_TriggerDelay", self.TriggerDelay) and ((!self:GetBuff_Override("Override_TriggerCharge", self.TriggerCharge) and self:GetTriggerDelta() < 1)
-            or (self:GetBuff_Override("Override_TriggerCharge", self.TriggerCharge) and self:IsTriggerHeld())) then
+    if self:GetBuff_Override("Override_TriggerDelay", self.TriggerDelay) and ((!triggerCharge and self:GetTriggerDelta() < 1)
+            or (triggerCharge and self:IsTriggerHeld())) then
         return
     end
 
@@ -81,23 +89,29 @@ function SWEP:CanPrimaryAttack()
 end
 
 function SWEP:TakePrimaryAmmo(num)
-    if self:HasBottomlessClip() or self:Clip1() <= 0 then
+    local clip = self:Clip1()
+
+    if self:HasBottomlessClip() or clip <= 0 then
         if self:Ammo1() <= 0 then return end
         if self:HasInfiniteAmmo() then return end
         self:GetOwner():RemoveAmmo(num, self:GetPrimaryAmmoType())
     return end
-    self:SetClip1(self:Clip1() - num)
+    self:SetClip1(clip - num)
 end
 
 function SWEP:ApplyRandomSpread(dir, spread)
     local radius = math.Rand(0, 1)
     local theta = math.Rand(0, math.rad(360))
     local bulletang = dir:Angle()
-    local forward, right, up = bulletang:Forward(), bulletang:Right(), bulletang:Up()
+    local right, up = bulletang:Right(), bulletang:Up()
     local x = radius * math.sin(theta)
     local y = radius * math.cos(theta)
 
-    dir:Set(dir + right * spread * x + up * spread * y)
+    right:Mul(spread*x)
+    up:Mul(spread*y)
+
+    dir:Add(up)
+    dir:Add(right)
 end
 
 function SWEP:PrimaryAttack()
@@ -126,7 +140,10 @@ function SWEP:PrimaryAttack()
         return
     end
 
-    local dir = (owner:EyeAngles() + self:GetFreeAimOffset()):Forward() --owner:GetAimVector()
+    local eyeAngles = owner:EyeAngles()
+    eyeAngles:Add(self:GetFreeAimOffset())
+
+    local dir = eyeAngles:Forward() --owner:GetAimVector()
     local src = self:GetShootSrc()
 
     if bit.band(util.PointContents(src), CONTENTS_WATER) == CONTENTS_WATER and !(self.CanFireUnderwater or self:GetBuff_Override("Override_CanFireUnderwater")) then
@@ -141,7 +158,7 @@ function SWEP:PrimaryAttack()
 
     -- Try malfunctioning
     local mal = self:DoMalfunction(false)
-    if mal == true then
+    if mal then
         local anim = "fire_jammed"
         self:PlayAnimation(anim, 1, true, 0, true)
         return
@@ -149,9 +166,9 @@ function SWEP:PrimaryAttack()
 
     self:GetBuff_Hook("Hook_PreFireBullets")
 
-    local desync = ArcCW.ConVars["desync"]:GetBool()
+    local desync = GetConVar("arccw_desync"):GetBool()
     local desyncnum = (desync and math.random()) or 0
-    math.randomseed(math.Round(util.SharedRandom(self:GetBurstCount(), -1337, 1337, !game.SinglePlayer() and self:GetOwner():GetCurrentCommand():CommandNumber() or CurTime()) * (self:EntIndex() % 30241)) + desyncnum)
+    math.randomseed(math.Round(util.SharedRandom(self:GetBurstCount(), -1337, 1337, !isSinglePlayer and owner:GetCurrentCommand():CommandNumber() or CurTime()) * (self:EntIndex() % 30241)) + desyncnum)
 
     self.Primary.Automatic = true
 
@@ -163,7 +180,7 @@ function SWEP:PrimaryAttack()
 
     self:ApplyRandomSpread(dir, disp)
 
-    if (CLIENT or game.SinglePlayer()) and ArcCW.ConVars["dev_shootinfo"]:GetInt() >= 3 and disp > 0 then
+    if (CLIENT or isSinglePlayer) and GetConVar("arccw_dev_shootinfo"):GetInt() >= 3 and disp > 0 then
         local dev_tr = util.TraceLine({
             start = src,
             endpos = src + owner:GetAimVector() * 33000,
@@ -209,35 +226,34 @@ function SWEP:PrimaryAttack()
     dmgtable = self:GetBuff_Override("Override_BodyDamageMults") or dmgtable
 
     -- drive by is cool
-    src = ArcCW:GetVehicleFireTrace(self:GetOwner(), src, dir) or src
+    src = ArcCW:GetVehicleFireTrace(owner, src, dir) or src
 
-    local bullet      = {}
-    bullet.Attacker   = owner
-    bullet.Dir        = dir
-    bullet.Src        = src
-    bullet.Spread     = Vector(0, 0, 0) --Vector(spread, spread, spread)
-    bullet.Damage     = 0
-    bullet.Num        = num
-
+    local damage = self:GetBuff("Damage")
     local sglove = math.ceil(num / 3)
-    bullet.Force      = self:GetBuff("Force", true) or math.Clamp( ( (50 / sglove) / ( (self:GetBuff("Damage") + self:GetBuff("DamageMin")) / (self:GetBuff("Num") * 2) ) ) * sglove, 1, 3 )
-                        -- Overperforming weapons get the jerf, underperforming gets boost
-    bullet.Distance   = self:GetBuff("Distance", true) or 33300
-    -- Setting AmmoType makes the engine look for the tracer effect on the ammo instead of TracerName!
-    --bullet.AmmoType   = self.Primary.Ammo
-    bullet.HullSize   = self:GetBuff("HullSize")
-    bullet.Tracer     = tracernum or 0
-    bullet.TracerName = tracer
-    bullet.Weapon     = self
-    bullet.Callback = function(att, tr, dmg)
-        ArcCW:BulletCallback(att, tr, dmg, self)
-    end
+
+    local bullet      = {
+        Attacker = owner,
+        Dir = dir,
+        Src = src,
+        Spread = Vector(0,0,0),
+        Damage = 0,
+        Num = num,
+        Force = self:GetBuff("Force", true) or math.Clamp( ( (50 / sglove) / ( (damage + self:GetBuff("DamageMin")) / (num * 2) ) ) * sglove, 1, 3 ),
+        Distance = self:GetBuff("Distance", true) or 33300,
+        HullSize = self:GetBuff("HullSize"),
+        Tracer = tracernum or 0,
+        TracerName = tracer,
+        Weapon = self,
+        Callback = function(att, tr, dmg)
+            ArcCW:BulletCallback(att, tr, dmg, self)
+        end
+    }
 
     local shootent = self:GetBuff("ShootEntity", true) --self:GetBuff_Override("Override_ShootEntity", self.ShootEntity)
     local shpatt   = self:GetBuff_Override("Override_ShotgunSpreadPattern", self.ShotgunSpreadPattern)
     local shpattov = self:GetBuff_Override("Override_ShotgunSpreadPatternOverrun", self.ShotgunSpreadPatternOverrun)
 
-    local extraspread = AngleRand() * self:GetDispersion() * ArcCW.MOAToAcc / 10
+    local extraspread = AngleRand() * self:GetDispersion() * ArcCW.MOAToAcc * 0.1
 
     local projectiledata = {}
 
@@ -255,21 +271,25 @@ function SWEP:PrimaryAttack()
         local minnum = shootent and 1 or 0
 
         if doent > minnum then
+            local noRandSpread = self:GetBuff_Override("Override_NoRandSpread", self.NoRandSpread)
             for n = 1, bullet.Num do
                 bullet.Num = 1
 
                 local dispers = self:GetBuff_Override("Override_ShotgunSpreadDispersion", self.ShotgunSpreadDispersion)
                 local offset  = self:GetShotgunSpreadOffset(n)
-                local calcoff = dispers and (offset * self:GetDispersion() * ArcCW.MOAToAcc / 10) or offset
+                local calcoff = dispers and (offset * self:GetDispersion() * ArcCW.MOAToAcc * 0.1) or offset
 
-                local ang = owner:EyeAngles() + self:GetFreeAimOffset()
+                local ang = eyeAngles
                 local ang2 = Angle(ang)
-                ang2:RotateAroundAxis(ang:Right(), -1 * calcoff.p)
-                ang2:RotateAroundAxis(ang:Up(), calcoff.y)
-                ang2:RotateAroundAxis(ang:Forward(), calcoff.r)
+                ang2:RotateAroundAxis(ang:Right(), -calcoff[1])
+                ang2:RotateAroundAxis(ang:Up(), calcoff[2])
+                ang2:RotateAroundAxis(ang:Forward(), calcoff[3])
 
-                if !self:GetBuff_Override("Override_NoRandSpread", self.NoRandSpread) then -- Needs testing
-                    ang2 = ang2 + AngleRand() * spread / 5
+                if not noRandSpread then -- Needs testing
+
+                    local angleRand = AngleRand()
+                    angleRand:Mul(spread*0.2)
+                    ang2:Add(angleRand)
                 end
 
                 if shootent then
@@ -283,7 +303,7 @@ function SWEP:PrimaryAttack()
                 end
             end
         elseif shootent then
-            local ang = owner:EyeAngles() + self:GetFreeAimOffset()
+            local ang = eyeAngles
 
             if !self:GetBuff_Override("Override_NoRandSpread", self.NoRandSpread) then
                -- ang = (dir + VectorRand() * spread / 5):Angle()
@@ -299,12 +319,13 @@ function SWEP:PrimaryAttack()
         end
     else
         if !bullet then return end
-
-        for n = 1, bullet.Num do
-            bullet.Num = 1
-            local dirry = Vector(dir.x, dir.y, dir.z)
-            math.randomseed(math.Round(util.SharedRandom(n, -1337, 1337, !game.SinglePlayer() and self:GetOwner():GetCurrentCommand():CommandNumber() or CurTime()) * (self:EntIndex() % 30241)) + desyncnum)
-            if !self:GetBuff_Override("Override_NoRandSpread", self.NoRandSpread) then
+        if !bullet.Num then bullet.Num = 1 end
+        local noRandSpread = self:GetBuff_Override("Override_NoRandSpread", self.NoRandSpread)
+        local dirry = Vector(dir)
+        for n = 1, bullet.Num do 
+            dirry:Set(dir)
+            math.randomseed(math.Round(util.SharedRandom(n, -1337, 1337, !isSinglePlayer and owner:GetCurrentCommand():CommandNumber() or CurTime()) * (self:EntIndex() % 30241)) + desyncnum)
+            if not noRandSpread then
                 self:ApplyRandomSpread(dirry, spread)
                 bullet.Dir = dirry
             end
@@ -320,7 +341,7 @@ function SWEP:PrimaryAttack()
 
     owner:DoAnimationEvent(self:GetBuff_Override("Override_AnimShoot") or self.AnimShoot)
 
-    local shouldsupp = SERVER and !game.SinglePlayer()
+    local shouldsupp = SERVER and !isSinglePlayer
 
     if shouldsupp then SuppressHostEvents(owner) end
 
@@ -335,15 +356,15 @@ function SWEP:PrimaryAttack()
 
     if self:GetCurrentFiremode().Mode < 0 and self:GetBurstCount() == self:GetBurstLength() then
         local postburst = (self:GetCurrentFiremode().PostBurstDelay or 0)
-        self:SetWeaponOpDelay(CurTime() + postburst * self:GetBuff_Mult("Mult_PostBurstDelay") + self:GetBuff_Add("Add_PostBurstDelay"))
+        self:SetWeaponOpDelay(curtime + postburst * self:GetBuff_Mult("Mult_PostBurstDelay") + self:GetBuff_Add("Add_PostBurstDelay"))
     end
 
     if (self:GetIsManualAction()) and !(self.NoLastCycle and self:Clip1() == 0) then
         local fireanim = self:GetBuff_Hook("Hook_SelectFireAnimation") or self:SelectAnimation("fire")
         local firedelay = self.Animations[fireanim].MinProgress or 0
         self:SetNeedCycle(true)
-        self:SetWeaponOpDelay(CurTime() + (firedelay * self:GetBuff_Mult("Mult_CycleTime")))
-        self:SetNextPrimaryFire(CurTime() + 0.1)
+        self:SetWeaponOpDelay(curtime + (firedelay * self:GetBuff_Mult("Mult_CycleTime")))
+        self:SetNextPrimaryFire(curtime + 0.1)
     end
 
     self:ApplyAttachmentShootDamage()
@@ -351,9 +372,8 @@ function SWEP:PrimaryAttack()
     self:AddHeat(self:GetBuff("HeatGain"))
 
     mal = self:DoMalfunction(true)
-    if mal == true then
-        local anim = "fire_jammed"
-        self:PlayAnimation(anim, 1, true, 0, true)
+    if mal then
+        self:PlayAnimation("fire_jammed", 1, true, 0, true)
     end
 
     if self:GetCurrentFiremode().Mode == 1 then
@@ -418,7 +438,7 @@ function SWEP:DoShootSound(sndoverride, dsndoverride, voloverride, pitchoverride
     local volume = self.ShootVol
     local pitch  = self.ShootPitch * math.Rand(1 - spv, 1 + spv) * self:GetBuff_Mult("Mult_ShootPitch")
 
-    local v = ArcCW.ConVars["weakensounds"]:GetFloat()
+    local v = GetConVar("arccw_weakensounds"):GetFloat()
 
     volume = volume - v
 
@@ -445,6 +465,7 @@ function SWEP:DoShootSound(sndoverride, dsndoverride, voloverride, pitchoverride
     self:GetBuff_Hook("Hook_AddShootSound", data)
 end
 
+local bullvel = GetConVar("arccw_bullet_velocity")
 function SWEP:GetMuzzleVelocity()
     local vel = self:GetBuff_Override("Override_PhysBulletMuzzleVelocity", self.PhysBulletMuzzleVelocity)
 
@@ -461,7 +482,7 @@ function SWEP:GetMuzzleVelocity()
 
     vel = vel * self:GetBuff_Mult("Mult_PhysBulletMuzzleVelocity")
 
-    vel = vel * ArcCW.ConVars["bullet_velocity"]:GetFloat()
+    vel = vel * bullvel:GetFloat()
 
     return vel
 end
@@ -477,7 +498,7 @@ function SWEP:DoPrimaryFire(isent, data)
     end
     local owner = self:GetOwner()
 
-    local shouldphysical = ArcCW.ConVars["bullet_enable"]:GetBool()
+    local shouldphysical = GetConVar("arccw_bullet_enable"):GetBool()
 
     if self.AlwaysPhysBullet or self:GetBuff_Override("Override_AlwaysPhysBullet") then
         shouldphysical = true
@@ -490,7 +511,7 @@ function SWEP:DoPrimaryFire(isent, data)
     if isent then
         self:FireRocket(data.ent, data.vel, data.ang, self.PhysBulletDontInheritPlayerVelocity)
     else
-        -- if !game.SinglePlayer() and !IsFirstTimePredicted() then return end
+        -- if !isSinglePlayer and !IsFirstTimePredicted() then return end
         if !IsFirstTimePredicted() then return end
 
         if shouldphysical then
@@ -643,11 +664,11 @@ function SWEP:GetDispersion()
 
     if self:InBipod() then hip = hip * (self.BipodDispersion * self:GetBuff_Mult("Mult_BipodDispersion")) end
 
-    if ArcCW.ConVars["mult_crouchdisp"]:GetFloat() != 1 and owner:OnGround() and owner:Crouching() then
-        hip = hip * ArcCW.ConVars["mult_crouchdisp"]:GetFloat()
+    if GetConVar("arccw_mult_crouchdisp"):GetFloat() != 1 and owner:OnGround() and owner:Crouching() then
+        hip = hip * GetConVar("arccw_mult_crouchdisp"):GetFloat()
     end
 
-    if ArcCW.ConVars["freeaim"]:GetInt() == 1 and !sights then
+    if GetConVar("arccw_freeaim"):GetInt() == 1 and !sights then
         hip = hip ^ 0.9
     end
 
@@ -703,7 +724,7 @@ function SWEP:DoShellEject(atti)
 end
 
 function SWEP:DoEffects(att)
-    if !game.SinglePlayer() and !IsFirstTimePredicted() then return end
+    if !isSinglePlayer and !IsFirstTimePredicted() then return end
 
     local ed = EffectData()
     ed:SetStart(self:GetShootSrc())
@@ -731,7 +752,7 @@ function SWEP:DryFire()
 end
 
 function SWEP:DoRecoil()
-    local single = game.SinglePlayer()
+    local single = isSinglePlayer
 
     if !single and !IsFirstTimePredicted() then return end
 
@@ -774,8 +795,8 @@ function SWEP:DoRecoil()
 
     if recoiltbl and recoiltbl[self:GetBurstCount()] then rmul = rmul * recoiltbl[self:GetBurstCount()] end
 
-    if ArcCW.ConVars["mult_crouchrecoil"]:GetFloat() != 1 and self:GetOwner():OnGround() and self:GetOwner():Crouching() then
-        rmul = rmul * ArcCW.ConVars["mult_crouchrecoil"]:GetFloat()
+    if GetConVar("arccw_mult_crouchrecoil"):GetFloat() != 1 and self:GetOwner():OnGround() and self:GetOwner():Crouching() then
+        rmul = rmul * GetConVar("arccw_mult_crouchrecoil"):GetFloat()
     end
 
     local punch = Angle()
@@ -909,5 +930,5 @@ function SWEP:SecondaryAttack()
 end
 
 function SWEP:CanShootWhileSprint()
-    return ArcCW.ConVars["mult_shootwhilesprinting"]:GetBool() or self:GetBuff_Override("Override_ShootWhileSprint", self.ShootWhileSprint)
+    return GetConVar("arccw_mult_shootwhilesprinting"):GetBool() or self:GetBuff_Override("Override_ShootWhileSprint", self.ShootWhileSprint)
 end

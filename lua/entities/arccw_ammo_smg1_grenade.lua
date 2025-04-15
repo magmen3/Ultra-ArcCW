@@ -34,6 +34,7 @@ function ENT:Detonate(wet, attacker)
         util.Effect("Explosion", e)
 
         util.BlastDamage(self, attacker, self:GetPos(), self.DetonationRadius, self.DetonationDamage)
+		util.ScreenShake(self:GetPos(),25,4,.75,450)
         self:Remove()
     end
 end

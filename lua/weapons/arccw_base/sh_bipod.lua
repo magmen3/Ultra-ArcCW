@@ -1,15 +1,22 @@
-function SWEP:InBipod()
-    local bip = self:GetInBipod()
+do
+    local entityEyePos = FindMetaTable("Entity").EyePos
 
-    -- if !self:CanBipod() then
-    --     self:ExitBipod()
-    -- end
-
-    if IsValid(self:GetOwner()) and self:GetBipodPos() != self:GetOwner():EyePos() then
-        self:ExitBipod()
+    function SWEP:InBipod()
+        local owner = self:GetOwner()
+        local swepDt = self.dt
+    
+        local bip = swepDt.InBipod
+    
+        -- if !self:CanBipod() then
+        --     self:ExitBipod()
+        -- end
+    
+        if IsValid(owner) and swepDt.BipodPos ~= entityEyePos(owner) then
+            self:ExitBipod()
+        end
+    
+        return bip
     end
-
-    return bip
 end
 
 SWEP.CachedCanBipod = true

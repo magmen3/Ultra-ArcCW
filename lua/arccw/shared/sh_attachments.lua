@@ -1,5 +1,6 @@
 ArcCW.AttachmentBlacklistTable = ArcCW.AttachmentBlacklistTable or {}
 
+local GetConVar = GetConVar
 function ArcCW:PlayerCanAttach(ply, wep, attname, slot, detach)
     -- The global variable takes priority over everything
     if !ArcCW.EnableCustomization then return false end
@@ -14,11 +15,11 @@ function ArcCW:PlayerCanAttach(ply, wep, attname, slot, detach)
     local ret = hook.Run("ArcCW_PlayerCanAttach", ply, wep, attname, slot, detach)
 
     if ret == nil and engine.ActiveGamemode() == "terrortown" then
-        local mode = ArcCW.ConVars["ttt_customizemode"]:GetInt()
+        local mode = GetConVar("arccw_ttt_customizemode"):GetInt()
         if mode == 1 and !ply.ArcCW_AllowCustomize then return false
         elseif mode == 2 and !ply.ArcCW_AllowCustomize and GetRoundState() == ROUND_ACTIVE then return false
         elseif mode == 3 and !ply.ArcCW_AllowCustomize and !ply:IsActiveTraitor() and !ply:IsActiveDetective() then return false end
-    elseif ret == nil and ArcCW.ConVars["enable_customization"]:GetInt() <= 0 then
+    elseif ret == nil and GetConVar("arccw_enable_customization"):GetInt() <= 0 then
         return false
     end
 
@@ -161,7 +162,7 @@ end
 
 function ArcCW:PlayerGetAtts(ply, att)
     if !IsValid(ply) then return 0 end
-    if ArcCW.ConVars["attinv_free"]:GetBool() then return 999 end
+    if GetConVar("arccw_attinv_free"):GetBool() then return 999 end
 
     if att == "" then return 999 end
 
@@ -203,7 +204,7 @@ function ArcCW:PlayerGiveAtt(ply, att, amt)
 
     if atttbl.InvAtt then att = atttbl.InvAtt end
 
-    if ArcCW.ConVars["attinv_lockmode"]:GetBool() then
+    if GetConVar("arccw_attinv_lockmode"):GetBool() then
         if ply.ArcCW_AttInv[att] == 1 then return end
         ply.ArcCW_AttInv[att] = 1
     else
@@ -214,7 +215,7 @@ end
 function ArcCW:PlayerTakeAtt(ply, att, amt)
     amt = amt or 1
 
-    if ArcCW.ConVars["attinv_lockmode"]:GetBool() then return end
+    if GetConVar("arccw_attinv_lockmode"):GetBool() then return end
 
     if !IsValid(ply) then return end
 
@@ -332,9 +333,9 @@ elseif SERVER then
 
 hook.Add("PlayerDeath", "ArcCW_DeathAttInv", function(ply)
     ply.ArcCW_AttInv = ply.ArcCW_AttInv or {}
-    if !table.IsEmpty(ply.ArcCW_AttInv)
-            and ArcCW.ConVars["attinv_loseondie"]:GetInt() >= 2
-            and !ArcCW.ConVars["attinv_free"]:GetBool() then
+    if !table.IsEmpty(ply.ArcCW_AttInv) 
+            and GetConVar("arccw_attinv_loseondie"):GetInt() >= 2
+            and !GetConVar("arccw_attinv_free"):GetBool() then
         local boxEnt = ents.Create("arccw_att_dropped")
         boxEnt:SetPos(ply:GetPos() + Vector(0, 0, 4))
         boxEnt.GiveAttachments = ply.ArcCW_AttInv
@@ -349,10 +350,10 @@ end)
 hook.Add("PlayerSpawn", "ArcCW_SpawnAttInv", function(ply, trans)
     if trans then return end
 
-    if ArcCW.ConVars["attinv_loseondie"]:GetInt() >= 1 then
+    if GetConVar("arccw_attinv_loseondie"):GetInt() >= 1 then
         ply.ArcCW_AttInv = {}
     end
-    local amt = ArcCW.ConVars["attinv_giveonspawn"]:GetInt()
+    local amt = GetConVar("arccw_attinv_giveonspawn"):GetInt()
     if amt > 0 then
         local giv = ArcCW:RollRandomAttachments(amt)
         for k, v in pairs(giv) do
@@ -368,7 +369,7 @@ net.Receive("arccw_rqwpnnet", function(len, ply)
     if !wpn.ArcCW then return end
 
     wpn:RecalcAllBuffs()
-    wpn:NetworkWeapon(ply)
+    wpn:NetworkWeapon()
 end)
 
 net.Receive("arccw_slidepos", function(len, ply)
@@ -435,10 +436,10 @@ net.Receive("arccw_asktodrop", function(len, ply)
     local attid = net.ReadUInt(24)
     local att = ArcCW.AttachmentIDTable[attid]
 
-    if ArcCW.ConVars["attinv_free"]:GetBool() then return end
-    if ArcCW.ConVars["attinv_lockmode"]:GetBool() then return end
-    if ArcCW.ConVars["enable_customization"]:GetInt() < 0 then return end
-    if !ArcCW.ConVars["enable_dropping"]:GetBool() then return end
+    if GetConVar("arccw_attinv_free"):GetBool() then return end
+    if GetConVar("arccw_attinv_lockmode"):GetBool() then return end
+    if GetConVar("arccw_enable_customization"):GetInt() < 0 then return end
+    if !GetConVar("arccw_enable_dropping"):GetBool() then return end
 
     if !att then return end
 
@@ -476,10 +477,6 @@ if SERVER then
         local wpn = net.ReadEntity()
 
         if wpn:GetOwner() != ply or !wpn.ArcCW then return end
-        if ply.ArcCW_DisableAutosave or ply.ArcCW_Sandbox_RandomAtts then
-            ply.ArcCW_Sandbox_RandomAtts = nil
-            return
-        end
 
         for k, v in pairs(wpn.Attachments) do
             wpn:Detach(k, true, true)
@@ -510,7 +507,6 @@ if SERVER then
         end
 
         wpn:AdjustAtts()
-        wpn:RefreshBGs()
 
         if ply.ArcCW_Sandbox_FirstSpawn then
             -- Curiously, RestoreAmmo has a sync delay only in singleplayer
@@ -525,6 +521,7 @@ if SERVER then
         net.Start("arccw_applypreset")
             net.WriteEntity(wpn)
         net.Send(ply)
+
     end)
 else
     net.Receive("arccw_applypreset", function()
@@ -535,7 +532,7 @@ else
 end
 
 function ArcCW:PlayerSendAttInv(ply)
-    if ArcCW.ConVars["attinv_free"]:GetBool() then return end
+    if GetConVar("arccw_attinv_free"):GetBool() then return end
 
     if !IsValid(ply) then return end
 

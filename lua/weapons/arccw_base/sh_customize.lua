@@ -1,8 +1,10 @@
 local translate = ArcCW.GetTranslation
 
 local function ScreenScaleMulti(input)
-    return ScreenScale(input) * ArcCW.ConVars["hud_size"]:GetFloat()
+    return ScreenScale(input) * GetConVar("arccw_hud_size"):GetFloat()
 end
+
+local custsounds, oldmenu = GetConVar("arccw_cust_sounds"), GetConVar("arccw_oldmenu")
 
 local temp = 0
 local SolidBlack = Color(temp, temp, temp)
@@ -45,14 +47,13 @@ local function DrawTextRot(span, txt, x, y, tx, ty, maxw, only)
     end
 end
 
+local noinspect = GetConVar("arccw_noinspect")
 
 function SWEP:ToggleCustomizeHUD(ic)
     if ic and self:GetState() == ArcCW.STATE_SPRINT then return end
     if self:GetReloading() then ic = false end
-    if self:GetState() == ArcCW.STATE_DISABLE then return end
 
-    local noinspect = (CLIENT and ArcCW.ConVars["noinspect"]:GetBool()) or (SERVER and self:GetOwner():GetInfoNum("arccw_noinspect", 0) > 0)
-
+    noinspect = noinspect or GetConVar("arccw_noinspect")
     if ic then
         if (self:GetNextPrimaryFire() + 0.1) >= CurTime() then return end
 
@@ -60,7 +61,7 @@ function SWEP:ToggleCustomizeHUD(ic)
         self:ExitSights()
         self:SetShouldHoldType()
         self:ExitBipod()
-        if !noinspect then
+        if noinspect and !noinspect:GetBool() then
             self:PlayAnimation(self:SelectAnimation("enter_inspect"), nil, true, nil, nil, true, false)
         end
 
@@ -73,7 +74,7 @@ function SWEP:ToggleCustomizeHUD(ic)
         self.Sprinted = false
         self:SetShouldHoldType()
 
-        if !noinspect then
+        if noinspect and !noinspect:GetBool() then
             self:PlayAnimation(self:SelectAnimation("exit_inspect"), nil, true, nil, nil, true, false)
         end
 
@@ -168,7 +169,7 @@ function SWEP:ValidateAttachment(attname, attslot, i)
         showqty = false
     end
 
-    if ArcCW.ConVars["attinv_free"]:GetBool() then
+    if GetConVar("arccw_attinv_free"):GetBool() then
         showqty = false
     end
 
@@ -176,7 +177,7 @@ function SWEP:ValidateAttachment(attname, attslot, i)
     --     showqty = false
     -- end
 
-    if ArcCW.ConVars["attinv_lockmode"]:GetBool() then
+    if GetConVar("arccw_attinv_lockmode"):GetBool() then
         showqty = false
     end
 
@@ -225,7 +226,7 @@ function SWEP:ValidateAttachment(attname, attslot, i)
         show = false
     end
 
-    if !owned and ArcCW.ConVars["attinv_hideunowned"]:GetBool() then
+    if !owned and GetConVar("arccw_attinv_hideunowned"):GetBool() then
         show = false
     end
 
@@ -238,22 +239,26 @@ function SWEP:OpenCustomizeHUD()
         ArcCW.InvHUD:Show()
         -- ArcCW.InvHUD:RequestFocus()
     else
-        --if GetConVar("arccw_dev_cust2beta"):GetBool() then self:CreateCustomize2HUD() else self:CreateCustomizeHUD() end
-        self:CreateCustomize2HUD()
+        if not oldmenu:GetBool() then self:CreateCustomize2HUD() else self:CreateCustomizeHUD() end
+        --self:CreateCustomize2HUD()
         gui.SetMousePos(ScrW() / 2, ScrH() / 2)
     end
 
     ArcCW.Inv_Hidden = false
     gui.EnableScreenClicker(true)
 
-    if ArcCW.ConVars["cust_sounds"]:GetBool() then surface.PlaySound("weapons/arccw/extra.wav") end
-
+    if custsounds:GetBool() then
+		if oldmenu:GetBool() then
+			surface.PlaySound("weapons/cw/sightraise1.wav")
+		else
+			surface.PlaySound("weapons/arccw/extra.wav")
+		end
+	end
 end
 
 function SWEP:CloseCustomizeHUD( hide )
     if IsValid(ArcCW.InvHUD) then
-        --if !GetConVar("arccw_dev_cust2beta"):GetBool() then
-        if false then
+        if oldmenu:GetBool() then
             ArcCW.InvHUD:Hide()
             ArcCW.InvHUD:Clear()
             if vrmod and vrmod.MenuExists( "ArcCW_Customize" ) then
@@ -264,7 +269,7 @@ function SWEP:CloseCustomizeHUD( hide )
             end
         else
             -- The new hud fades out instead of commiting sudoku, only do this if we're debugging
-            if ArcCW.ConVars["dev_removeonclose"]:GetBool() then
+            if GetConVar("arccw_dev_removeonclose"):GetBool() then
                 ArcCW.InvHUD:Remove()
             end
         end
@@ -274,7 +279,13 @@ function SWEP:CloseCustomizeHUD( hide )
         end
         ArcCW.Inv_Hidden = false
 
-        if ArcCW.ConVars["cust_sounds"]:GetBool() then surface.PlaySound("weapons/arccw/extra2.wav") end
+        if custsounds:GetBool() then
+			if oldmenu:GetBool() then
+				surface.PlaySound("weapons/cw/sightlower1.wav")
+			else
+				surface.PlaySound("weapons/arccw/extra2.wav")
+			end
+		end
     end
 end
 
@@ -308,8 +319,8 @@ function SWEP:CreateCustomizeHUD()
 
     ArcCW.InvHUD = vgui.Create("DFrame")
 
-            local scrwmult = ArcCW.ConVars["hud_deadzone_x"]:GetFloat() * ScrW()
-            local scrhmult = ArcCW.ConVars["hud_deadzone_y"]:GetFloat() * ScrH()
+            local scrwmult = GetConVar("arccw_hud_deadzone_x"):GetFloat() * ScrW()
+            local scrhmult = GetConVar("arccw_hud_deadzone_y"):GetFloat() * ScrH()
 
     scrw, scrh = scrw - scrwmult, scrh - scrhmult
 
@@ -352,7 +363,7 @@ function SWEP:CreateCustomizeHUD()
         gui.EnableScreenClicker(false)
     end
 
-    if ArcCW.ConVars["attinv_onlyinspect"]:GetBool() then
+    if GetConVar("arccw_attinv_onlyinspect"):GetBool() then
         return
     end
 
@@ -473,12 +484,12 @@ function SWEP:CreateCustomizeHUD()
         surface.SetTextColor(SolidBlack)
         surface.SetTextPos(smallgap, 0)
         surface.SetFont("ArcCW_12_Glow")
-        surface.DrawText(translate("name." .. self:GetClass() .. (ArcCW.ConVars["truenames"]:GetBool() and ".true" or "")) or self.PrintName)
+        surface.DrawText(translate("name." .. self:GetClass() .. (GetConVar("arccw_truenames"):GetBool() and ".true" or "")) or self.PrintName)
 
         surface.SetTextColor(Bfg_col)
         surface.SetTextPos(smallgap, 0)
         surface.SetFont("ArcCW_12")
-        surface.DrawText(translate("name." .. self:GetClass() .. (ArcCW.ConVars["truenames"]:GetBool() and ".true" or "")) or self.PrintName)
+        surface.DrawText(translate("name." .. self:GetClass() .. (GetConVar("arccw_truenames"):GetBool() and ".true" or "")) or self.PrintName)
 
         surface.SetTextColor(Bfg_col)
         surface.SetTextPos(smallgap * 2, (h - linesize) / 2 + smallgap)
@@ -892,7 +903,13 @@ function SWEP:CreateCustomizeHUD()
             atttrivia:Hide()
             attslidebox:Hide()
             atttogglebtn:Hide()
-            if ArcCW.ConVars["cust_sounds"]:GetBool() then surface.PlaySound("weapons/arccw/close.wav") end
+            if custsounds:GetBool() then
+				if oldmenu:GetBool() then
+					surface.PlaySound("weapons/cw/sightlower1.wav")
+				else
+					surface.PlaySound("weapons/arccw/close.wav")
+				end
+			end
         end
     end
 
@@ -903,7 +920,7 @@ function SWEP:CreateCustomizeHUD()
         if k.Integral then continue end
 
         local attcatb = attcats:Add("DButton")
-        if ArcCW.ConVars["hud_embracetradition"]:GetBool() then
+        if GetConVar("arccw_hud_embracetradition"):GetBool() then
             attcatb:SetSize(barsize, buttonsize )
         else
             attcatb:SetSize(barsize, buttonsize / 2)
@@ -989,7 +1006,7 @@ function SWEP:CreateCustomizeHUD()
                 end
                 local owned = self:PlayerOwnsAtt(att)
 
-                if !owned and ArcCW.ConVars["attinv_hideunowned"]:GetBool() then continue end
+                if !owned and GetConVar("arccw_attinv_hideunowned"):GetBool() then continue end
 
                 local valid, installed, blocked, showqty = self:ValidateAttachment(att, k, i)
 
@@ -1044,10 +1061,10 @@ function SWEP:CreateCustomizeHUD()
                             self:DetachAllMergeSlots(span.AttIndex)
                         elseif owned then
                             -- Drop attachment
-                            if ArcCW.ConVars["attinv_free"]:GetBool() then return end
-                            if ArcCW.ConVars["attinv_lockmode"]:GetBool() then return end
-                            if ArcCW.ConVars["enable_customization"]:GetInt() < 0 then return end
-                            if !ArcCW.ConVars["enable_dropping"]:GetBool() then return end
+                            if GetConVar("arccw_attinv_free"):GetBool() then return end
+                            if GetConVar("arccw_attinv_lockmode"):GetBool() then return end
+                            if GetConVar("arccw_enable_customization"):GetInt() < 0 then return end
+                            if !GetConVar("arccw_enable_dropping"):GetBool() then return end
 
                             net.Start("arccw_asktodrop")
                                 net.WriteUInt(ArcCW.AttachmentTable[spaa.AttName].ID, 24)
@@ -1100,7 +1117,7 @@ function SWEP:CreateCustomizeHUD()
                         atttrivia_do(spaa.AttName, i)
                     end
 
-                    if !owned and ArcCW.ConVars["attinv_darkunowned"]:GetBool() then
+                    if !owned and GetConVar("arccw_attinv_darkunowned"):GetBool() then
                         if spaa:IsHovered() then
                             Bbg_col = Color(50, 50, 50, 150)
                             Bfg_col = Color(150, 150, 150, 255)
@@ -1199,7 +1216,13 @@ function SWEP:CreateCustomizeHUD()
                     atttrivia:Hide()
                     attslidebox:Hide()
                     atttogglebtn:Hide()
-                    surface.PlaySound("weapons/arccw/close.wav")
+					if custsounds:GetBool() then
+						if oldmenu:GetBool() then
+							surface.PlaySound("weapons/cw/sightlower1.wav")
+						else
+							surface.PlaySound("weapons/arccw/close.wav")
+						end
+					end
                 else
                     activeslot = span.AttIndex
                     triviabox:Hide()
@@ -1208,7 +1231,13 @@ function SWEP:CreateCustomizeHUD()
                     attslider:SetSlideX(self.Attachments[span.AttIndex].SlidePos)
                     lastslidepos = self.Attachments[span.AttIndex].SlidePos
                     self.InAttMenu = true
-                    surface.PlaySound("weapons/arccw/open.wav")
+					if custsounds:GetBool() then
+						if oldmenu:GetBool() then
+							surface.PlaySound("weapons/cw/selector.wav")
+						else
+							surface.PlaySound("weapons/arccw/open.wav")
+						end
+					end
 
                     span.TextRot = 0
                     span.StartTextRot = CurTime()
@@ -1279,7 +1308,7 @@ function SWEP:CreateCustomizeHUD()
                     perc = math.Round(perc)
                     txt = txt .. " (" .. tostring(perc) .. "%)"
                 end
-                if !ArcCW.ConVars["hud_embracetradition"]:GetBool() then
+                if !GetConVar("arccw_hud_embracetradition"):GetBool() then
                     att_txt = translate("name." .. installed) or atttbl.PrintName
 
                     if atttbl.Icon then
@@ -1289,7 +1318,7 @@ function SWEP:CreateCustomizeHUD()
                 end
             end
 
-            if ArcCW.ConVars["hud_embracetradition"]:GetBool() then
+            if GetConVar("arccw_hud_embracetradition"):GetBool() then
                 surface.SetDrawColor(Bbg_col)
                 surface.DrawRect(0, 0, w, h)
                 surface.DrawRect(0, 0, w, h / 2)
@@ -1752,12 +1781,12 @@ function SWEP:CreateCustomizeHUD()
             {translate("stat.damage"), translate("stat.damage.tooltip"),
                 function()
                     local curNum = self:GetBuff("Num")
-                    local orig = math.Round(self.Damage * ArcCW.ConVars["mult_damage"]:GetFloat()) .. (self.Num != 1 and ("×" .. self.Num) or "")
-                    local cur = math.Round(self:GetDamage(0) / curNum * ArcCW.ConVars["mult_damage"]:GetFloat()) .. (curNum != 1 and ("×" .. curNum) or "")
+                    local orig = math.Round(self.Damage * GetConVar("arccw_mult_damage"):GetFloat()) .. (self.Num != 1 and ("×" .. self.Num) or "")
+                    local cur = math.Round(self:GetDamage(0) / curNum * GetConVar("arccw_mult_damage"):GetFloat()) .. (curNum != 1 and ("×" .. curNum) or "")
                     return orig, cur
                 end,
                 function()
-                    local orig = self.Damage * self.Num * ArcCW.ConVars["mult_damage"]:GetFloat()
+                    local orig = self.Damage * self.Num * GetConVar("arccw_mult_damage"):GetFloat()
                     local cur = self:GetDamage(0)
                     if orig == cur then return nil else return cur > orig end
                 end,
@@ -1765,12 +1794,12 @@ function SWEP:CreateCustomizeHUD()
             {translate("stat.damagemin"), translate("stat.damagemin.tooltip"),
                 function()
                     local curNum = self:GetBuff("Num")
-                    local orig = math.Round(self.DamageMin * ArcCW.ConVars["mult_damage"]:GetFloat()) .. (self.Num != 1 and ("×" .. self.Num) or "")
-                    local cur = math.Round(self:GetDamage(self.Range) / curNum * ArcCW.ConVars["mult_damage"]:GetFloat()) .. (curNum != 1 and ("×" .. curNum) or "")
+                    local orig = math.Round(self.DamageMin * GetConVar("arccw_mult_damage"):GetFloat()) .. (self.Num != 1 and ("×" .. self.Num) or "")
+                    local cur = math.Round(self:GetDamage(self.Range) / curNum * GetConVar("arccw_mult_damage"):GetFloat()) .. (curNum != 1 and ("×" .. curNum) or "")
                     return orig, cur
                 end,
                 function()
-                    local orig = self.DamageMin * self.Num * ArcCW.ConVars["mult_damage"]:GetFloat()
+                    local orig = self.DamageMin * self.Num * GetConVar("arccw_mult_damage"):GetFloat()
                     local maxgr = (self:GetBuff("Range"))
                     if math.Round(self:GetDamage(self.Range)) < math.Round(self:GetDamage(0)) then
                         maxgr = (self.Range / self:GetBuff_Mult("Mult_Range"))
