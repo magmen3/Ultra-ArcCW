@@ -20,6 +20,7 @@ CreateConVar("arccw_npc_replace", 0, FCVAR_ARCHIVE, "Replace NPC weapons with Ar
 CreateConVar("arccw_npc_atts", 1, FCVAR_ARCHIVE, "Randomly give NPC weapons attachments.")
 
 CreateConVar("arccw_truenames", 1, cf, "Use true names instead of fake names, where applicable. Requires restart.")
+CreateConVar("arccw_realism", 0, cf, "Disable all 'non-realistic' attachment slots.")
 
 CreateConVar("arccw_equipmentammo", 1, cf, "Generate unique ammo types for throwables.", 0, 1) -- Automatically assign unique ammo types to each throwable weapon. Prone to running into the ammo type limit.
 CreateConVar("arccw_equipmentsingleton", 0, cf, "Make grenades and equipment not use ammo, and remove themselves on use.", 0, 1)

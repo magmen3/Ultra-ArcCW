@@ -47,6 +47,7 @@ ArcCW.ClientConVars = {
     ["arccw_attinv_gamemodebuttons"]  = { def =  1 },
 
 	["arccw_oldmenu"]                 = { def =  0 },
+	["arccw_hidestats"]               = { def =  0 },
 	["arccw_fancy_spawnmenu"]         = { def =  1 },
 	["arccw_killfeed_enable"]         = { def =  1 },
 	["arccw_killfeed_dynamic"]        = { def =  1 },
